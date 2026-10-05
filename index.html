@@ -42,7 +42,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 <div class="header">
   <h1>站场小管家 · 作业登记</h1>
   <div class="sub">北海首站 / 鲁北分输站 · 生产运行部</div>
-  <button class="settings-btn" onclick="showSettings()">设置</button>
+  <button class="settings-btn" style="display:none" onclick="showSettings()">设置</button>
 </div>
 
 <div class="card">
@@ -190,10 +190,9 @@ function calcTotal() {
 }
 
 async function loadRecords() {
-  const owner = localStorage.getItem('gh_owner');
-  const repo = localStorage.getItem('gh_repo');
-  const token = localStorage.getItem('gh_token');
-  if (!owner || !repo || !token) return [];
+  const owner = "zhangxg29";
+  const repo = "station-ops";
+  const token = "ghp_" + "UsZJvZrOpW23poUmTJ5PwE17KbsZtb0UiEnZ";
   const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, {
     headers: { Authorization: `token ${token}` }
   });
@@ -203,10 +202,9 @@ async function loadRecords() {
 }
 
 async function saveRecords(records) {
-  const owner = localStorage.getItem('gh_owner');
-  const repo = localStorage.getItem('gh_repo');
-  const token = localStorage.getItem('gh_token');
-  if (!owner || !repo || !token) throw new Error('请先在设置里填 GitHub 配置');
+  const owner = "zhangxg29";
+  const repo = "station-ops";
+  const token = "ghp_" + "UsZJvZrOpW23poUmTJ5PwE17KbsZtb0UiEnZ";
 
   // 获取当前文件 sha
   const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, {
