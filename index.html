@@ -6,7 +6,7 @@
 <title>站场小管家 · 作业登记</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #333; padding-bottom: 90px; }
+body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #333; padding-bottom: 140px; }
 .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
 .header h1 { font-size: 18px; font-weight: 600; }
 .header .sub { font-size: 12px; opacity: 0.85; margin-top: 4px; }
@@ -36,8 +36,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .submit-btn { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; border: none; padding: 14px 24px; border-radius: 24px; font-size: 16px; font-weight: 600; }
 .submit-btn:disabled { opacity: 0.5; }
 .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 16px 24px; border-radius: 8px; font-size: 15px; z-index: 100; display: none; }
-.nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px; display: flex; justify-content: center; gap: 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); z-index: 20; }
-.nav a { color: #1e3c72; text-decoration: none; font-size: 13px; padding: 6px 16px; border-radius: 16px; }
+.nav { display: flex; justify-content: center; gap: 16px; padding: 6px 0 0; }
+.nav a { color: #1e3c72; text-decoration: none; font-size: 12px; padding: 4px 12px; border-radius: 12px; }
 .nav a.active { background: #1e3c72; color: #fff; }
 </style>
 </head>
@@ -108,16 +108,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
   <div class="total">
     <div class="label">本次耗材合计</div>
     <div class="value">¥<span id="total">0.00</span></div>
+    <div class="nav">
+      <a href="index.html" class="active">作业登记</a>
+      <a href="dashboard.html">驾驶舱</a>
+    </div>
   </div>
   <button class="submit-btn" id="submitBtn" onclick="submit()">提交记录</button>
 </div>
 
 <div class="toast" id="toast"></div>
-
-<div class="nav">
-  <a href="index.html" class="active">作业登记</a>
-  <a href="dashboard.html">驾驶舱</a>
-</div>
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
