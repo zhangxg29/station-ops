@@ -105,7 +105,9 @@ th { color: #888; font-weight: 500; font-size: 11px; }
   <div class="record-list">
     <div class="toolbar">
       <input type="text" id="searchLib" placeholder="搜索耗材..." oninput="renderLib()">
-      <button class="btn btn-primary" onclick="addConsumableRow()">+ 新增耗材</button>
+      <input type="file" id="importFile" accept=".xlsx,.csv" style="display:none" onchange="importFile(this)">
+      <button class="btn" onclick="document.getElementById('importFile').click()">📤 导入Excel</button>
+      <button class="btn btn-primary" onclick="addConsumableRow()">+ 新增</button>
     </div>
     <div id="libTable"></div>
   </div>
@@ -116,6 +118,7 @@ th { color: #888; font-weight: 500; font-size: 11px; }
   <a href="dashboard.html" class="active">驾驶舱</a>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const supabase = createClient(
@@ -236,6 +239,49 @@ async function addConsumableRow() {
   if (error) alert('新增失败: ' + error.message);
   else { consumables.push(data[0]); renderLib(); }
 }
+window.addConsumableRow = addConsumableRow;
+
+async function importFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  // 找表头行（包含"名称"或"物资名称"）
+  let start = 0;
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    if (rows[i].some(c => String(c||'').includes('名称'))) { start = i; break; }
+  }
+  const header = rows[start].map(h => String(h||'').trim());
+  const idx = name => header.findIndex(h => h.includes(name));
+  const iName = idx('名称'), iSpec = idx('规格'), iUnit = idx('单位'), iPrice = idx('单价');
+  if (iName < 0) { alert('表格里没找到"名称"列，请按物资清单格式'); return; }
+  const toAdd = [];
+  for (let i = start+1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[iName]) continue;
+    toAdd.push({
+      name: String(r[iName]).trim(),
+      spec: iSpec>=0 ? String(r[iSpec]||'').trim() : '',
+      unit: iUnit>=0 ? String(r[iUnit]||'').trim() : '个',
+      price: iPrice>=0 ? parseFloat(r[iPrice])||0 : 0,
+      active: true
+    });
+  }
+  if (!toAdd.length) { alert('没读到数据'); return; }
+  if (!confirm(`识别到 ${toAdd.length} 条耗材，是否导入？`)) return;
+  const { error } = await supabase.from('consumables').insert(toAdd);
+  if (error) alert('导入失败: ' + error.message);
+  else {
+    alert(`✅ 成功导入 ${toAdd.length} 条`);
+    const { data } = await supabase.from('consumables').select('*').order('name');
+    consumables = data || [];
+    renderLib();
+  }
+  input.value = '';
+}
+window.importFile = importFile;
 
 loadData();
 </script>
