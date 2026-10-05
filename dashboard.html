@@ -147,6 +147,7 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   window.scrollTo(0, 0);
 }
+window.switchTab = switchTab;
 
 function filterByRange() {
   const range = document.getElementById('range').value;
