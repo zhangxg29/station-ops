@@ -126,12 +126,16 @@ let records = [];
 let consumables = [];
 
 async function loadData() {
-  const [r1, r2] = await Promise.all([
-    supabase.from('records').select('*').order('created_at', { ascending: false }),
-    supabase.from('consumables').select('*').order('name')
-  ]);
-  records = r1.data || [];
-  consumables = r2.data || [];
+  try {
+    const [r1, r2] = await Promise.all([
+      supabase.from('records').select('*').order('created_at', { ascending: false }),
+      supabase.from('consumables').select('*').order('name')
+    ]);
+    records = r1.data || [];
+    consumables = r2.data || [];
+  } catch (e) {
+    alert('数据加载失败: ' + e.message);
+  }
   render();
   renderLib();
 }
@@ -141,7 +145,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('sec-' + name).classList.add('active');
   btn.classList.add('active');
-  if (name === 'dash') render();
+  window.scrollTo(0, 0);
 }
 
 function filterByRange() {
