@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>站场小管家 · 数据看板</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #333; }
+.header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; padding: 16px; text-align: center; }
+.header h1 { font-size: 18px; }
+.header .sub { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+.filter-bar { background: #fff; padding: 10px 16px; display: flex; gap: 8px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.filter-bar label { font-size: 13px; color: #666; }
+.filter-bar select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; }
+.stat-card { background: #fff; border-radius: 10px; padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.stat-card .label { font-size: 12px; color: #888; }
+.stat-card .value { font-size: 22px; font-weight: 700; color: #1e3c72; margin-top: 4px; }
+.stat-card .value.orange { color: #e67e22; }
+.chart-card { background: #fff; margin: 12px; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.chart-card h3 { font-size: 14px; color: #1e3c72; margin-bottom: 8px; padding-left: 8px; border-left: 3px solid #1e3c72; }
+.chart { height: 260px; }
+.nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px; display: flex; justify-content: center; gap: 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); }
+.nav a { color: #1e3c72; text-decoration: none; font-size: 13px; padding: 6px 16px; border-radius: 16px; }
+.nav a.active { background: #1e3c72; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>站场小管家 · 数据看板</h1>
+  <div class="sub">北海首站 / 鲁北分输站</div>
+</div>
+
+<div class="filter-bar">
+  <label>时间范围</label>
+  <select id="range" onchange="render()">
+    <option value="month" selected>本月</option>
+    <option value="week">本周</option>
+    <option value="year">今年</option>
+  </select>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">作业次数</div>
+    <div class="value" id="stat-count">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">总工时(h)</div>
+    <div class="value" id="stat-hours">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">耗材成本(元)</div>
+    <div class="value orange" id="stat-cost">0</div>
+  </div>
+</div>
+
+<div class="chart-card">
+  <h3>月度成本趋势</h3>
+  <div id="chart-trend" class="chart"></div>
+</div>
+
+<div class="chart-card">
+  <h3>人员工时排行</h3>
+  <div id="chart-worker" class="chart"></div>
+</div>
+
+<div class="chart-card">
+  <h3>耗材消耗 TOP 10</h3>
+  <div id="chart-consumable" class="chart"></div>
+</div>
+
+<div class="chart-card">
+  <h3>作业类别分布</h3>
+  <div id="chart-category" class="chart"></div>
+</div>
+
+<div class="nav">
+  <a href="index.html">作业登记</a>
+  <a href="dashboard.html" class="active">数据看板</a>
+</div>
+
+<script>
+let records = [];
+
+async function loadData() {
+  const owner = localStorage.getItem('gh_owner');
+  const repo = localStorage.getItem('gh_repo');
+  const token = localStorage.getItem('gh_token');
+  if (!owner || !repo) {
+    alert('请先在登记页设置里填 GitHub 配置');
+    return;
+  }
+  const h = token ? { Authorization: `token ${token}` } : {};
+  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, { headers: h });
+  if (!r.ok) {
+    alert('读取失败，请检查配置');
+    return;
+  }
+  const d = await r.json();
+  records = JSON.parse(atob(d.content));
+  render();
+}
+
+function filterByRange() {
+  const range = document.getElementById('range').value;
+  const now = new Date();
+  return records.filter(r => {
+    const t = new Date(r.time);
+    if (range === 'week') {
+      const weekAgo = new Date(now.getTime() - 7*24*3600*1000);
+      return t >= weekAgo;
+    }
+    if (range === 'month') {
+      return t.getMonth() === now.getMonth() && t.getFullYear() === now.getFullYear();
+    }
+    if (range === 'year') {
+      return t.getFullYear() === now.getFullYear();
+    }
+    return true;
+  });
+}
+
+function render() {
+  const data = filterByRange();
+
+  // 统计
+  const count = data.length;
+  const hours = data.reduce((s, r) => s + r.duration, 0);
+  const cost = data.reduce((s, r) => s + r.totalAmount, 0);
+  document.getElementById('stat-count').textContent = count;
+  document.getElementById('stat-hours').textContent = hours.toFixed(1);
+  document.getElementById('stat-cost').textContent = cost.toFixed(0);
+
+  // 月度趋势（按最近6个月）
+  const months = [];
+  const costByMonth = {};
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    months.push(key);
+    costByMonth[key] = 0;
+  }
+  records.forEach(r => {
+    const t = new Date(r.time);
+    const key = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+    if (costByMonth[key] !== undefined) costByMonth[key] += r.totalAmount;
+  });
+  echarts.init(document.getElementById('chart-trend')).setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: months },
+    yAxis: { type: 'value' },
+    series: [{ data: months.map(m => costByMonth[m]), type: 'line', smooth: true, areaStyle: {}, color: '#2a5298' }]
+  });
+
+  // 人员工时
+  const workerMap = {};
+  data.forEach(r => {
+    workerMap[r.worker] = (workerMap[r.worker] || 0) + r.duration;
+  });
+  const wKeys = Object.keys(workerMap).sort((a,b) => workerMap[b]-workerMap[a]);
+  echarts.init(document.getElementById('chart-worker')).setOption({
+    tooltip: {},
+    grid: { left: 80, right: 20 },
+    xAxis: { type: 'value' },
+    yAxis: { type: 'category', data: wKeys },
+    series: [{ data: wKeys.map(k => workerMap[k]), type: 'bar', color: '#2a5298' }]
+  });
+
+  // 耗材 TOP
+  const cMap = {};
+  data.forEach(r => {
+    r.items.forEach(it => {
+      cMap[it.name] = (cMap[it.name] || 0) + it.amount;
+    });
+  });
+  const cKeys = Object.keys(cMap).sort((a,b) => cMap[b]-cMap[a]).slice(0, 10);
+  echarts.init(document.getElementById('chart-consumable')).setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 100, right: 20 },
+    xAxis: { type: 'value' },
+    yAxis: { type: 'category', data: cKeys.reverse() },
+    series: [{ data: cKeys.map(k => cMap[k].toFixed(0)), type: 'bar', color: '#e67e22' }]
+  });
+
+  // 类别分布
+  const catMap = {};
+  data.forEach(r => { catMap[r.category] = (catMap[r.category] || 0) + 1; });
+  echarts.init(document.getElementById('chart-category')).setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie', radius: '60%',
+      data: Object.keys(catMap).map(k => ({ name: k, value: catMap[k] }))
+    }]
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>

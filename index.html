@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>站场小管家 · 作业登记</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #333; padding-bottom: 80px; }
+.header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header .sub { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+.card { background: #fff; margin: 12px; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.card h2 { font-size: 15px; color: #1e3c72; margin-bottom: 12px; padding-left: 8px; border-left: 3px solid #1e3c72; }
+label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; background: #fafafa; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298; background: #fff; }
+.form-row { margin-bottom: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.consumable-row { background: #f8f9ff; border: 1px solid #e0e4f5; border-radius: 8px; padding: 10px; margin-bottom: 10px; position: relative; }
+.consumable-row .row-top { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.consumable-row select { flex: 1; }
+.consumable-row .price-tag { font-size: 12px; color: #e67e22; white-space: nowrap; }
+.consumable-row .row-bottom { display: flex; gap: 8px; align-items: center; }
+.consumable-row .row-bottom input { flex: 1; }
+.consumable-row .unit-tag { font-size: 12px; color: #888; }
+.consumable-row .remove-btn { background: #ffecec; color: #e74c3c; border: none; padding: 8px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.add-btn { width: 100%; padding: 12px; background: #e8f0fe; color: #1e3c72; border: 1px dashed #2a5298; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.total-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 12px; z-index: 10; }
+.total-bar .total { flex: 1; }
+.total-bar .total .label { font-size: 12px; color: #888; }
+.total-bar .total .value { font-size: 20px; color: #e67e22; font-weight: 700; }
+.submit-btn { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; border: none; padding: 14px 28px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; }
+.submit-btn:disabled { opacity: 0.5; }
+.settings-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 16px 24px; border-radius: 8px; font-size: 15px; z-index: 100; display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>站场小管家 · 作业登记</h1>
+  <div class="sub">北海首站 / 鲁北分输站 · 生产运行部</div>
+  <button class="settings-btn" onclick="showSettings()">设置</button>
+</div>
+
+<div class="card">
+  <h2>基本信息</h2>
+  <div class="form-row">
+    <label>作业人员</label>
+    <select id="worker"></select>
+  </div>
+  <div class="grid2">
+    <div class="form-row">
+      <label>所属站场</label>
+      <select id="station">
+        <option value="鲁北分输站">鲁北分输站</option>
+        <option value="北海首站">北海首站</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>作业区域</label>
+      <select id="area">
+        <option>综合楼</option><option>进站区</option><option>过滤区</option>
+        <option>收发球筒区</option><option>计量区</option><option>调压区</option>
+        <option>综合设备间</option><option>其他区域</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="form-row">
+      <label>作业类别</label>
+      <select id="category">
+        <option>日常巡检</option><option>维护保养</option><option>检修维修</option>
+        <option>应急处置</option><option>保洁绿化</option><option>其他</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>作业时长(小时)</label>
+      <input type="number" id="duration" step="0.5" min="0" value="1">
+    </div>
+  </div>
+  <div class="form-row">
+    <label>作业内容</label>
+    <textarea id="content" rows="2" placeholder="简述本次做了什么..."></textarea>
+  </div>
+</div>
+
+<div class="card">
+  <h2>本次耗材（自动算钱）</h2>
+  <div id="consumables"></div>
+  <button class="add-btn" onclick="addConsumable()">+ 加一种耗材</button>
+</div>
+
+<div class="total-bar">
+  <div class="total">
+    <div class="label">本次耗材合计</div>
+    <div class="value">¥<span id="total">0.00</span></div>
+  </div>
+  <button class="submit-btn" id="submitBtn" onclick="submit()">提交记录</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WORKERS = ["刘天官","王鑫宇","王继阳","刘嘉豪","李刚","张秀国","刘明曦","高延雷","成悦","高文儒","谢宇","刘杨","王伟新","吕长健","郭勤广","张东东","章炳辉"];
+let consumables = [];
+
+// 初始化人员下拉
+const workerSel = document.getElementById('worker');
+WORKERS.forEach(w => {
+  const opt = document.createElement('option');
+  opt.value = opt.text = w;
+  workerSel.appendChild(opt);
+});
+
+// 加载耗材库
+let consumableList = [];
+async function loadConsumables() {
+  const r = await fetch('data/consumables.json');
+  consumableList = await r.json();
+}
+
+function addConsumable(name = '', qty = 1) {
+  consumables.push({ name, qty });
+  renderConsumables();
+}
+
+function removeConsumable(i) {
+  consumables.splice(i, 1);
+  renderConsumables();
+}
+
+function renderConsumables() {
+  const box = document.getElementById('consumables');
+  box.innerHTML = '';
+  consumables.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'consumable-row';
+    row.innerHTML = `
+      <div class="row-top">
+        <select onchange="onCChange(${i}, this.value)">
+          <option value="">-- 选择耗材 --</option>
+          ${consumableList.map(x => `<option value="${x.name}|${x.spec}|${x.price}|${x.unit}" ${c.name === x.name ? 'selected' : ''}>${x.name} (${x.spec.substring(0,20)})</option>`).join('')}
+        </select>
+        <span class="price-tag" id="price-${i}"></span>
+      </div>
+      <div class="row-bottom">
+        <input type="number" step="0.5" min="0" value="${c.qty}" onchange="onQtyChange(${i}, this.value)">
+        <span class="unit-tag" id="unit-${i}"></span>
+        <button class="remove-btn" onclick="removeConsumable(${i})">删除</button>
+      </div>
+    `;
+    box.appendChild(row);
+    if (c.name) updatePriceTag(i);
+  });
+  calcTotal();
+}
+
+function onCChange(i, val) {
+  const [name, spec, price, unit] = val.split('|');
+  consumables[i].name = name;
+  updatePriceTag(i);
+  calcTotal();
+}
+
+function updatePriceTag(i) {
+  const c = consumables[i];
+  const found = consumableList.find(x => x.name === c.name);
+  if (found) {
+    document.getElementById(`price-${i}`).textContent = `¥${found.price}/${found.unit}`;
+    document.getElementById(`unit-${i}`).textContent = found.unit;
+  }
+}
+
+function onQtyChange(i, v) {
+  consumables[i].qty = parseFloat(v) || 0;
+  calcTotal();
+}
+
+function calcTotal() {
+  let total = 0;
+  consumables.forEach(c => {
+    const found = consumableList.find(x => x.name === c.name);
+    if (found) total += found.price * c.qty;
+  });
+  document.getElementById('total').textContent = total.toFixed(2);
+  return total;
+}
+
+async function loadRecords() {
+  const owner = localStorage.getItem('gh_owner');
+  const repo = localStorage.getItem('gh_repo');
+  const token = localStorage.getItem('gh_token');
+  if (!owner || !repo || !token) return [];
+  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, {
+    headers: { Authorization: `token ${token}` }
+  });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return JSON.parse(atob(d.content));
+}
+
+async function saveRecords(records) {
+  const owner = localStorage.getItem('gh_owner');
+  const repo = localStorage.getItem('gh_repo');
+  const token = localStorage.getItem('gh_token');
+  if (!owner || !repo || !token) throw new Error('请先在设置里填 GitHub 配置');
+
+  // 获取当前文件 sha
+  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, {
+    headers: { Authorization: `token ${token}` }
+  });
+  let sha = null;
+  if (r.ok) {
+    const d = await r.json();
+    sha = d.sha;
+  }
+
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(records, null, 2))));
+  const body = {
+    message: '新增作业记录',
+    content,
+    branch: 'main'
+  };
+  if (sha) body.sha = sha;
+
+  const w = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!w.ok) {
+    const t = await w.text();
+    throw new Error('保存失败: ' + t);
+  }
+}
+
+async function submit() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+
+  const total = calcTotal();
+  const items = consumables.filter(c => c.name).map(c => {
+    const found = consumableList.find(x => x.name === c.name);
+    return {
+      name: c.name,
+      spec: found ? found.spec : '',
+      unit: found ? found.unit : '',
+      price: found ? found.price : 0,
+      qty: c.qty,
+      amount: found ? found.price * c.qty : 0
+    };
+  });
+
+  const record = {
+    id: Date.now(),
+    worker: document.getElementById('worker').value,
+    station: document.getElementById('station').value,
+    area: document.getElementById('area').value,
+    category: document.getElementById('category').value,
+    duration: parseFloat(document.getElementById('duration').value) || 0,
+    content: document.getElementById('content').value,
+    items,
+    totalAmount: total,
+    time: new Date().toISOString()
+  };
+
+  try {
+    const records = await loadRecords();
+    records.push(record);
+    await saveRecords(records);
+    showToast('✅ 提交成功！');
+    // 重置
+    document.getElementById('content').value = '';
+    consumables = [];
+    renderConsumables();
+  } catch (e) {
+    showToast('❌ ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2000);
+}
+
+function showSettings() {
+  const owner = localStorage.getItem('gh_owner') || '';
+  const repo = localStorage.getItem('gh_repo') || '';
+  const token = localStorage.getItem('gh_token') || '';
+  const nOwner = prompt('GitHub 用户名:', owner);
+  if (nOwner === null) return;
+  const nRepo = prompt('仓库名 (例如 station-ops):', repo);
+  if (nRepo === null) return;
+  const nToken = prompt('Personal Access Token (repo 权限):', token);
+  if (nToken === null) return;
+  localStorage.setItem('gh_owner', nOwner);
+  localStorage.setItem('gh_repo', nRepo);
+  localStorage.setItem('gh_token', nToken);
+  showToast('✅ 设置已保存');
+}
+
+// 初始化
+(async () => {
+  await loadConsumables();
+  addConsumable();
+})();
+</script>
+</body>
+</html>
