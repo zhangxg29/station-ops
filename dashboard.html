@@ -87,14 +87,10 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 let records = [];
 
 async function loadData() {
-  const owner = localStorage.getItem('gh_owner');
-  const repo = localStorage.getItem('gh_repo');
-  const token = localStorage.getItem('gh_token');
-  if (!owner || !repo) {
-    alert('请先在登记页设置里填 GitHub 配置');
-    return;
-  }
-  const h = token ? { Authorization: `token ${token}` } : {};
+  const owner = "zhangxg29";
+  const repo = "station-ops";
+  const token = "ghp_" + "UsZJvZrOpW23poUmTJ5PwE17KbsZtb0UiEnZ";
+  const h = { Authorization: `token ${token}` };
   const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/records.json`, { headers: h });
   if (!r.ok) {
     alert('读取失败，请检查配置');
