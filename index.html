@@ -36,8 +36,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .submit-btn { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; border: none; padding: 14px 24px; border-radius: 24px; font-size: 16px; font-weight: 600; }
 .submit-btn:disabled { opacity: 0.5; }
 .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 16px 24px; border-radius: 8px; font-size: 15px; z-index: 100; display: none; }
-.nav { display: flex; justify-content: center; gap: 16px; padding: 6px 0 0; }
-.nav a { color: #1e3c72; text-decoration: none; font-size: 12px; padding: 4px 12px; border-radius: 12px; }
+.nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 8px; display: flex; justify-content: center; gap: 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); z-index: 15; }
+.nav a { color: #1e3c72; text-decoration: none; font-size: 13px; padding: 6px 16px; border-radius: 16px; }
 .nav a.active { background: #1e3c72; color: #fff; }
 </style>
 </head>
@@ -60,6 +60,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
       <select id="station">
         <option value="鲁北分输站">鲁北分输站</option>
         <option value="北海首站">北海首站</option>
+        <option value="银高分输站">银高分输站</option>
+        <option value="环海门站">环海门站</option>
+        <option value="马山子分输清管站">马山子分输清管站</option>
+        <option value="棣丰阀室">棣丰阀室</option>
+        <option value="西小王阀室">西小王阀室</option>
       </select>
     </div>
     <div class="form-row">
@@ -67,7 +72,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
       <select id="area">
         <option>综合楼</option><option>进站区</option><option>过滤区</option>
         <option>收发球筒区</option><option>计量区</option><option>调压区</option>
-        <option>综合设备间</option><option>其他区域</option>
+        <option>综合设备间</option><option>压缩机区</option><option>空压机区</option>
+        <option>高压配电间</option><option>低压配电间</option><option>机柜间</option>
+        <option>UPS间</option><option>供热源热泵区</option><option>柴油发电间</option>
+        <option>消防罐区</option><option>其他区域</option>
       </select>
     </div>
   </div>
@@ -108,7 +116,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
   <div class="total">
     <div class="label">本次耗材合计</div>
     <div class="value">¥<span id="total">0.00</span></div>
-    <div class="nav" style="display:none">
+    <div class="nav">
       <a href="index.html" class="active">作业登记</a>
       <a href="dashboard.html">驾驶舱</a>
     </div>
@@ -160,15 +168,19 @@ window.removeConsumable = function(i) {
 function renderConsumables() {
   const box = document.getElementById('consumables');
   box.innerHTML = '';
+  let dl = document.getElementById('consumable-datalist');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'consumable-datalist';
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = consumableList.map(x => `<option value="${x.name.replace(/"/g,'&quot;')}">`).join('');
   consumables.forEach((c, i) => {
     const row = document.createElement('div');
     row.className = 'consumable-row';
     row.innerHTML = `
       <div class="row-top">
-        <select onchange="onCChange(${i}, this.value)">
-          <option value="">-- 选择耗材 --</option>
-          ${consumableList.map(x => `<option value="${x.id}" ${c.name === x.name ? 'selected' : ''}>${x.name} (${(x.spec||'').substring(0,15)})</option>`).join('')}
-        </select>
+        <input list="consumable-datalist" placeholder="🔍 输入耗材名搜索..." value="${c.name||''}" onchange="onCChange(${i}, this.value)">
         <span class="price-tag" id="price-${i}"></span>
       </div>
       <div class="row-bottom">
@@ -184,8 +196,8 @@ function renderConsumables() {
 }
 
 window.onCChange = function(i, val) {
-  const found = consumableList.find(x => String(x.id) === String(val));
-  consumables[i].name = found ? found.name : '';
+  const found = consumableList.find(x => x.name === val);
+  consumables[i].name = found ? found.name : val;
   updatePriceTag(i);
   calcTotal();
 };
