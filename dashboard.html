@@ -232,6 +232,7 @@ async function upd(id, field, val) {
   const { error } = await supabase.from('consumables').update({ [field]: val }).eq('id', id);
   if (error) alert('保存失败: ' + error.message);
 }
+window.upd = upd;
 
 async function delRow(id) {
   if (!confirm('确定删除？')) return;
@@ -239,6 +240,7 @@ async function delRow(id) {
   if (error) alert('删除失败: ' + error.message);
   else { consumables = consumables.filter(c => c.id !== id); renderLib(); }
 }
+window.delRow = delRow;
 
 async function addConsumableRow() {
   const { data, error } = await supabase.from('consumables').insert({ name: '新耗材', spec: '', unit: '个', price: 0, active: true }).select();
