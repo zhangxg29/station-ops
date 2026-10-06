@@ -71,7 +71,13 @@ th { color: #888; font-weight: 500; font-size: 11px; }
     <option value="">全部</option>
     <option>鲁北分输站</option>
     <option>北海首站</option>
+    <option>银高分输站</option>
+    <option>环海门站</option>
+    <option>马山子分输清管站</option>
+    <option>棣丰阀室</option>
+    <option>西小王阀室</option>
   </select>
+  <button class="btn btn-primary" onclick="exportWeek()">📥 导出周报表(Excel)</button>
 </div>
 
 <div class="tabs">
@@ -282,6 +288,33 @@ async function importFile(input) {
   input.value = '';
 }
 window.importFile = importFile;
+
+function exportWeek() {
+  const data = filterByRange();
+  if (!data.length) { alert('当前筛选无数据'); return; }
+  const rows = [['日期','人员','站场','作业区域','类别','时长(h)','作业内容','耗材明细','金额(元)','照片']];
+  data.forEach(r => {
+    rows.push([
+      new Date(r.created_at).toLocaleDateString(),
+      r.worker||'', r.station||'', r.area||'', r.category||'',
+      r.duration||0, r.content||'',
+      (r.items||[]).map(i=>`${i.name}×${i.qty}${i.unit||''}`).join('；'),
+      (r.total_amount||0).toFixed(2),
+      r.photo_url ? '有' : ''
+    ]);
+  });
+  // 合计行
+  const total = data.reduce((s,r)=>s+(r.total_amount||0),0);
+  rows.push(['合计','','','','','','','', total.toFixed(2),'']);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // A4 横版列宽
+  ws['!cols'] = [{wch:10},{wch:8},{wch:14},{wch:12},{wch:10},{wch:7},{wch:30},{wch:30},{wch:10},{wch:6}];
+  ws['!props'] = { orientation: 'landscape' };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '周作业记录');
+  XLSX.writeFile(wb, `站场小管家-周报表-${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+window.exportWeek = exportWeek;
 
 loadData();
 </script>
