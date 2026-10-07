@@ -29,6 +29,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .photo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .photo-preview { width: 70px; height: 70px; border-radius: 6px; object-fit: cover; }
 .photo-add { width: 70px; height: 70px; border: 2px dashed #bbb; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 24px; background: #fafafa; }
+.quick-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.quick-phrases button { background: #e8f0fe; color: #1e3c72; border: 1px solid #c8d8f0; padding: 5px 10px; border-radius: 14px; font-size: 12px; }
 .total-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 12px; z-index: 10; }
 .total-bar .total { flex: 1; }
 .total-bar .total .label { font-size: 12px; color: #888; }
@@ -94,6 +96,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
   </div>
   <div class="form-row">
     <label>作业内容</label>
+    <div class="quick-phrases" id="quickPhrases"></div>
     <textarea id="content" rows="2" placeholder="简述本次做了什么..."></textarea>
   </div>
 </div>
@@ -106,7 +109,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 
 <div class="card">
   <h2>现场照片</h2>
-  <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="onPhoto(this)">
+  <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="onPhoto(this)">
   <div class="photo-row" id="photoRow">
     <div class="photo-add" onclick="document.getElementById('photoInput').click()">+</div>
   </div>
@@ -134,9 +137,22 @@ window.supabase = createClient(
 );
 
 const WORKERS = ["崔晓通","成悦","冯雨","高文儒","高延雷","关沛","郭勤广","韩涛","胡建忠","黄海","黄鑫源","李善峰","李志猛","李刚","刘斌","刘嘉豪","刘天官","刘杨","刘洋","刘明曦","刘孜延","吕长健","宋程程","王明智","王伟新","王庆宾","王研","王继阳","王逸群","王鑫宇","谢宇","闫会文","杨宝增","杨健康","殷奥雨","章炳辉","张利","张秀国","张秀杰","张东东","赵红伟","赵鹏飞"];
+const PHRASES = ["日常巡检","设备外观检查","泄漏检查","阀门操作","仪表读数记录","过滤器清洗","排污","加注润滑脂","更换密封件","卫生清扫","灭火器检查","设备保养","压缩机巡检","电气柜检查","UPS检查"];
 let consumableList = [];
 let consumables = [];
-let photoFile = null;
+let photoFiles = [];
+
+// 渲染快捷短语
+const qp = document.getElementById('quickPhrases');
+PHRASES.forEach(p => {
+  const b = document.createElement('button');
+  b.textContent = p;
+  b.onclick = () => {
+    const ta = document.getElementById('content');
+    ta.value = p;
+  };
+  qp.appendChild(b);
+});
 
 const workerSel = document.getElementById('worker');
 WORKERS.forEach(w => {
@@ -227,19 +243,21 @@ function calcTotal() {
 }
 
 window.onPhoto = function(input) {
-  photoFile = input.files[0];
-  if (!photoFile) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const row = document.getElementById('photoRow');
-    const old = row.querySelector('.photo-preview');
-    if (old) old.remove();
-    const img = document.createElement('img');
-    img.className = 'photo-preview';
-    img.src = e.target.result;
-    row.insertBefore(img, row.firstChild);
-  };
-  reader.readAsDataURL(photoFile);
+  const files = Array.from(input.files || []);
+  files.forEach(f => {
+    photoFiles.push(f);
+    const reader = new FileReader();
+    reader.onload = e => {
+      const row = document.getElementById('photoRow');
+      const addBtn = row.querySelector('.photo-add');
+      const img = document.createElement('img');
+      img.className = 'photo-preview';
+      img.src = e.target.result;
+      row.insertBefore(img, addBtn);
+    };
+    reader.readAsDataURL(f);
+  });
+  input.value = '';
 };
 
 window.submit = async function() {
@@ -259,37 +277,51 @@ window.submit = async function() {
       };
     });
 
-    let photoUrl = '';
-    if (photoFile) {
-      const ext = photoFile.name.split('.').pop();
-      const path = `records/${Date.now()}.${ext}`;
+    // 多图上传
+    let photoUrls = [];
+    for (const f of photoFiles) {
+      const ext = f.name.split('.').pop();
+      const path = `records/${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`;
       const { error: upErr } = await window.supabase.storage
         .from('photos')
-        .upload(path, photoFile, { upsert: true });
-      if (upErr) throw new Error('照片上传失败: ' + upErr.message);
+        .upload(path, f, { upsert: true });
+      if (upErr) continue;
       const { data } = window.supabase.storage.from('photos').getPublicUrl(path);
-      photoUrl = data.publicUrl;
+      photoUrls.push(data.publicUrl);
     }
 
+    const station = document.getElementById('station').value;
     const record = {
       worker: document.getElementById('worker').value,
-      station: document.getElementById('station').value,
+      station,
       area: document.getElementById('area').value,
       category: document.getElementById('category').value,
       duration: parseFloat(document.getElementById('duration').value) || 0,
       content: document.getElementById('content').value,
       items,
       total_amount: total,
-      photo_url: photoUrl
+      photo_url: photoUrls[0] || '',
+      photo_urls: photoUrls
     };
 
     const { error } = await window.supabase.from('records').insert(record);
     if (error) throw new Error('保存失败: ' + error.message);
 
+    // 自动扣库存
+    const qtyField = station.includes('银高') ? 'qty_yin' : station.includes('北海') ? 'qty_beihai' : 'qty_lubei';
+    for (const it of items) {
+      const found = consumableList.find(x => x.name === it.name);
+      if (found) {
+        await window.supabase.from('consumables')
+          .update({ [qtyField]: (found[qtyField]||0) - it.qty })
+          .eq('id', found.id);
+      }
+    }
+
     showToast('✅ 提交成功！');
     document.getElementById('content').value = '';
     consumables = [];
-    photoFile = null;
+    photoFiles = [];
     renderConsumables();
     document.getElementById('photoRow').innerHTML = '<div class="photo-add" onclick="document.getElementById(\'photoInput\').click()">+</div>';
     document.getElementById('photoInput').value = '';
