@@ -80,7 +80,10 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
     <option>西小王阀室</option>
   </select>
   <button class="btn btn-primary" onclick="exportWeek()">📥 导出周报表(Excel)</button>
+  <button class="btn" onclick="printWeek()">🖨️ 打印周报</button>
 </div>
+
+<div id="warnBar" style="background:#ffeaa7;color:#d35400;padding:8px 12px;font-size:13px;display:none"></div>
 
 <div class="tabs">
   <button class="active" onclick="switchTab('dash', this)">📊 驾驶舱</button>
@@ -98,6 +101,7 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
   </div>
 
   <div class="chart-card"><h3>月度成本趋势</h3><div id="chart-trend" class="chart"></div></div>
+  <div class="chart-card"><h3>本月 vs 上月对比</h3><div id="chart-compare" class="chart"></div></div>
   <div class="chart-card"><h3>人员工时排行</h3><div id="chart-worker" class="chart"></div></div>
   <div class="chart-card"><h3>耗材消耗 TOP 10</h3><div id="chart-consumable" class="chart"></div></div>
   <div class="chart-card"><h3>作业类别分布</h3><div id="chart-category" class="chart"></div></div>
@@ -191,11 +195,43 @@ function render() {
   document.getElementById('stat-cost').textContent = cost.toFixed(0);
   document.getElementById('stat-avg').textContent = count ? (cost/30).toFixed(0) : 0;
 
+  // 库存预警
+  const warns = [];
+  consumables.forEach(c => {
+    if ((c.qty_yin||0) < 3) warns.push(`${c.name}(银高剩${c.qty_yin||0})`);
+    if ((c.qty_beihai||0) < 3) warns.push(`${c.name}(北海剩${c.qty_beihai||0})`);
+    if ((c.qty_lubei||0) < 3) warns.push(`${c.name}(鲁北剩${c.qty_lubei||0})`);
+  });
+  const wb = document.getElementById('warnBar');
+  if (warns.length) { wb.style.display='block'; wb.innerHTML = '⚠️ 低库存预警：' + warns.slice(0,5).join('、') + (warns.length>5 ? ' 等'+warns.length+'项' : ''); }
+  else wb.style.display='none';
+
   // 月度趋势
   const months = [], cm = {};
   for (let i=5;i>=0;i--) { const d=new Date(); d.setMonth(d.getMonth()-i); const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; months.push(k); cm[k]=0; }
   records.forEach(r => { const t=new Date(r.created_at); const k=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`; if (cm[k]!==undefined) cm[k]+=r.total_amount||0; });
   echarts.init(document.getElementById('chart-trend')).setOption({ tooltip:{trigger:'axis'}, xAxis:{type:'category',data:months}, yAxis:{type:'value'}, series:[{data:months.map(m=>cm[m]),type:'line',smooth:true,areaStyle:{},color:'#2a5298'}] });
+
+  // 本月 vs 上月
+  const now = new Date();
+  const mk = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const thisK = mk(now);
+  const last = new Date(); last.setMonth(last.getMonth()-1);
+  const lastK = mk(last);
+  let thisC=0, lastC=0, thisH=0, lastH=0;
+  records.forEach(r => {
+    const t=new Date(r.created_at); const k=mk(t);
+    if (k===thisK) { thisC+=r.total_amount||0; thisH+=r.duration||0; }
+    if (k===lastK) { lastC+=r.total_amount||0; lastH+=r.duration||0; }
+  });
+  echarts.init(document.getElementById('chart-compare')).setOption({
+    tooltip:{trigger:'axis'}, legend:{data:['成本(元)','工时(h)']},
+    xAxis:{type:'category',data:[lastK,thisK]}, yAxis:[{type:'value'},{type:'value'}],
+    series:[
+      {name:'成本(元)',type:'bar',data:[lastC.toFixed(0),thisC.toFixed(0)],color:'#e67e22'},
+      {name:'工时(h)',type:'line',yAxisIndex:1,data:[thisH.toFixed(1),thisH.toFixed(1)],color:'#2a5298'}
+    ]
+  });
 
   const wm = {}; data.forEach(r => { wm[r.worker]=(wm[r.worker]||0)+(r.duration||0); });
   const wk = Object.keys(wm).sort((a,b)=>wm[b]-wm[a]);
@@ -211,13 +247,39 @@ function render() {
   // 记录列表
   document.getElementById('recordList').innerHTML = data.slice(0,50).map(r => `
     <div class="record-item">
-      <div class="r-head"><span>${r.worker} · ${r.station||''}</span><span class="r-amt">¥${(r.total_amount||0).toFixed(2)}</span></div>
+      <div class="r-head"><span>${r.worker} · ${r.station||''}</span><span><span class="r-amt">¥${(r.total_amount||0).toFixed(2)}</span> <button class="btn btn-danger btn-sm" onclick="delRecord(${r.id})">删</button></span></div>
       <div class="r-meta">${new Date(r.created_at).toLocaleString()} · ${r.area||''} · ${r.category||''} · ${r.duration||0}h</div>
       <div class="r-content">${r.content||''}</div>
       ${(r.items||[]).length ? `<div class="r-items">耗材: ${r.items.map(i=>`${i.name}×${i.qty}${i.unit||''}`).join('、')}</div>` : ''}
-      ${r.photo_url ? `<img src="${r.photo_url}" onclick="viewPhoto('${r.photo_url}')">` : ''}
+      ${(r.photo_urls||[]).map(u => `<img src="${u}" onclick="viewPhoto('${u}')">`).join('') || (r.photo_url ? `<img src="${r.photo_url}" onclick="viewPhoto('${r.photo_url}')">` : '')}
     </div>`).join('');
 }
+
+async function delRecord(id) {
+  if (!confirm('确定删除这条记录？')) return;
+  const { error } = await supabase.from('records').delete().eq('id', id);
+  if (error) alert('删除失败: ' + error.message);
+  else { records = records.filter(r => r.id !== id); render(); }
+}
+window.delRecord = delRecord;
+
+function printWeek() {
+  const data = filterByRange();
+  let html = `<html><head><meta charset="utf-8"><style>body{font-family:微软雅黑;font-size:12px;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px}th{background:#e8f0fe}</style></head><body>`;
+  html += `<h1>站场小管家 · 周作业报表</h1><p>导出时间：${new Date().toLocaleString()}</p>`;
+  html += `<table><tr><th>日期</th><th>人员</th><th>站场</th><th>区域</th><th>类别</th><th>时长</th><th>内容</th><th>耗材明细</th><th>金额</th></tr>`;
+  data.forEach(r => {
+    html += `<tr><td>${new Date(r.created_at).toLocaleDateString()}</td><td>${r.worker||''}</td><td>${r.station||''}</td><td>${r.area||''}</td><td>${r.category||''}</td><td>${r.duration||''}h</td><td>${r.content||''}</td><td>${(r.items||[]).map(i=>`${i.name}×${i.qty}`).join('；')}</td><td>${(r.total_amount||0).toFixed(2)}</td></tr>`;
+  });
+  const total = data.reduce((s,r)=>s+(r.total_amount||0),0);
+  html += `<tr><td colspan="8" style="text-align:right;font-weight:bold">合计</td><td style="font-weight:bold">${total.toFixed(2)}</td></tr>`;
+  html += `</table><p style="margin-top:30px">站长签字：______________  日期：______________</p></body></html>`;
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 500);
+}
+window.printWeek = printWeek;
 
 function renderLib() {
   const q = (document.getElementById('searchLib').value||'').toLowerCase();
