@@ -35,7 +35,9 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 .r-amt { color: #e67e22; font-weight: 600; }
 .r-content { margin-top: 4px; }
 .r-items { color: #555; margin-top: 3px; font-size: 12px; }
-.record-item img { max-width: 90px; margin-top: 6px; border-radius: 4px; }
+.record-item img { max-width: 90px; margin-top: 6px; border-radius: 4px; cursor: zoom-in; }
+.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 999; display: none; align-items: center; justify-content: center; }
+.lightbox img { max-width: 95%; max-height: 95%; }
 table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
 th, td { padding: 5px 4px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; }
 th { color: #888; font-weight: 500; font-size: 10px; }
@@ -124,6 +126,10 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
   <a href="dashboard.html" class="active">驾驶舱</a>
 </div>
 
+<div class="lightbox" id="lightbox" onclick="this.style.display='none'">
+  <img id="lightboxImg">
+</div>
+
 <div id="savedTip" style="position:fixed;top:70px;right:20px;background:#1e3c72;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity 0.3s;z-index:200">✓ 已保存</div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -209,7 +215,7 @@ function render() {
       <div class="r-meta">${new Date(r.created_at).toLocaleString()} · ${r.area||''} · ${r.category||''} · ${r.duration||0}h</div>
       <div class="r-content">${r.content||''}</div>
       ${(r.items||[]).length ? `<div class="r-items">耗材: ${r.items.map(i=>`${i.name}×${i.qty}${i.unit||''}`).join('、')}</div>` : ''}
-      ${r.photo_url ? `<img src="${r.photo_url}">` : ''}
+      ${r.photo_url ? `<img src="${r.photo_url}" onclick="viewPhoto('${r.photo_url}')">` : ''}
     </div>`).join('');
 }
 
@@ -324,6 +330,12 @@ async function importFile(input) {
   input.value = '';
 }
 window.importFile = importFile;
+
+function viewPhoto(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+window.viewPhoto = viewPhoto;
 
 function exportWeek() {
   const data = filterByRange();
