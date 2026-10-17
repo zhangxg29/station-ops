@@ -403,14 +403,17 @@ window.submit = async function() {
     // 库里没有的耗材，先自动新增到耗材库
     const newOnes = consumables.filter(c => c.name && !consumableList.find(x => x.name === c.name));
     for (const n of newOnes) {
-      const { data, error } = await window.supabase.from('consumables').insert({
+      const base = {
         name: n.name,
         spec: '',
         unit: n.unit || '个',
         price: n.price || 0,
         active: true,
         qty_yin: 0, qty_beihai: 0, qty_lubei: 0
-      }).select();
+      };
+      let res = await window.supabase.from('consumables').insert({ ...base, note: '新增' }).select();
+      if (res.error) res = await window.supabase.from('consumables').insert(base).select();
+      const { data, error } = res;
       if (!error && data && data[0]) consumableList.push(data[0]);
     }
 
