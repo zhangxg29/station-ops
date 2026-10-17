@@ -257,9 +257,14 @@ function render() {
 
 async function delRecord(id) {
   if (!confirm('确定删除这条记录？')) return;
-  const { error } = await supabase.from('records').delete().eq('id', id);
-  if (error) alert('删除失败: ' + error.message);
-  else { records = records.filter(r => r.id !== id); render(); }
+  const { data, error } = await supabase.from('records').delete().eq('id', id).select();
+  if (error) { alert('删除失败: ' + error.message); return; }
+  if (!data || !data.length) {
+    alert('删除未生效：数据库没有开放 records 表的删除权限。\n请联系管理员在 Supabase 执行授权语句后重试。');
+    return;
+  }
+  records = records.filter(r => r.id !== id);
+  render();
 }
 window.delRecord = delRecord;
 
@@ -347,9 +352,11 @@ window.upd = upd;
 
 async function delRow(id) {
   if (!confirm('确定删除？')) return;
-  const { error } = await supabase.from('consumables').delete().eq('id', id);
-  if (error) alert('删除失败: ' + error.message);
-  else { consumables = consumables.filter(c => c.id !== id); renderLib(); }
+  const { data, error } = await supabase.from('consumables').delete().eq('id', id).select();
+  if (error) { alert('删除失败: ' + error.message); return; }
+  if (!data || !data.length) { alert('删除未生效：数据库没有开放该表的删除权限。'); return; }
+  consumables = consumables.filter(c => c.id !== id);
+  renderLib();
 }
 window.delRow = delRow;
 
