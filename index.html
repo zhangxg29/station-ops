@@ -43,6 +43,36 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 8px; display: flex; justify-content: center; gap: 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); z-index: 15; }
 .nav a { color: #1e3c72; text-decoration: none; font-size: 13px; padding: 6px 16px; border-radius: 16px; }
 .nav a.active { background: #1e3c72; color: #fff; }
+
+/* 点击式选择框 */
+.pick-input { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #d8dde8; border-radius: 8px; padding: 11px 12px; font-size: 14px; background: #fff; cursor: pointer; min-height: 44px; }
+.pick-input:active { background: #f2f6ff; }
+.pick-ph { color: #9aa4b5; }
+.pick-arrow { color: #9aa4b5; font-size: 12px; }
+.pick-input .cname { color: #1f2a44; font-weight: 500; }
+.pick-input .price-tag { color: #e67e22; font-size: 12px; font-weight: 600; }
+
+/* 底部弹层 */
+.picker-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: none; align-items: flex-end; }
+.picker { background: #fff; width: 100%; height: 78vh; border-radius: 16px 16px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+.picker-head { display: flex; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #eef1f6; align-items: center; }
+.picker-head input { flex: 1; border: 1px solid #d8dde8; border-radius: 20px; padding: 10px 14px; font-size: 15px; outline: none; }
+.picker-head input:focus { border-color: #2a5298; }
+.picker-cancel { border: none; background: transparent; color: #2a5298; font-size: 15px; padding: 6px 4px; }
+.picker-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.picker-item { padding: 13px 16px; border-bottom: 1px solid #f4f6fa; font-size: 15px; color: #1f2a44; }
+.picker-item:active { background: #eaf0ff; }
+.picker-item .sub { font-size: 11px; color: #98a2b3; margin-top: 3px; word-break: break-all; }
+.picker-item .ptag { float: right; color: #e67e22; font-size: 12px; font-weight: 600; margin-left: 8px; }
+.picker-empty { padding: 40px 16px; text-align: center; color: #9aa4b5; font-size: 14px; }
+.picker-foot { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #eef1f6; background: #fafbfd; }
+.picker-foot button { width: 100%; padding: 13px; background: #eef4ff; color: #1e3c72; border: 1px dashed #2a5298; border-radius: 10px; font-size: 15px; font-weight: 600; }
+.manual-form { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.manual-form input { border: 1px solid #d8dde8; border-radius: 8px; padding: 12px; font-size: 15px; outline: none; }
+.manual-form input:focus { border-color: #2a5298; }
+.manual-form .row2 { display: flex; gap: 10px; }
+.manual-form .row2 input { flex: 1; }
+.manual-form .save { padding: 13px; background: linear-gradient(135deg,#1e3c72,#2a5298); color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -56,8 +86,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
   <h2>基本信息</h2>
   <div class="form-row">
     <label>作业人员</label>
-    <input list="worker-list" id="worker" placeholder="🔍 输入姓名搜索..." autocomplete="off">
-    <datalist id="worker-list"></datalist>
+    <div class="pick-input" id="workerDisplay" onclick="openPicker('worker', -1)">
+      <span class="pick-ph" id="workerText">点击选择作业人员</span>
+      <span class="pick-arrow">▾</span>
+    </div>
+    <input type="hidden" id="worker">
   </div>
   <div class="grid2">
     <div class="form-row">
@@ -121,6 +154,18 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 
 <div class="toast" id="toast"></div>
 
+<!-- 选择弹层 -->
+<div class="picker-mask" id="pickerMask" onclick="if(event.target===this)closePicker()">
+  <div class="picker">
+    <div class="picker-head">
+      <input id="pickerSearch" placeholder="输入关键词搜索..." autocomplete="off" oninput="renderPickerList(this.value)">
+      <button class="picker-cancel" onclick="closePicker()">取消</button>
+    </div>
+    <div class="picker-list" id="pickerList"></div>
+    <div class="picker-foot" id="pickerFoot"></div>
+  </div>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 window.supabase = createClient(
@@ -144,13 +189,6 @@ PHRASES.forEach(p => {
     ta.value = p;
   };
   qp.appendChild(b);
-});
-
-const workerSel = document.getElementById('worker-list');
-WORKERS.forEach(w => {
-  const opt = document.createElement('option');
-  opt.value = w;
-  workerSel.appendChild(opt);
 });
 
 // 各站场作业区域
@@ -183,44 +221,41 @@ async function loadConsumables() {
   consumableList = data || [];
 }
 
-window.addConsumable = function(name = '', qty = 1) {
-  consumables.push({ name, qty });
+window.addConsumable = function() {
+  consumables.push({ name: '', qty: 1 });
   renderConsumables();
 };
 
 window.removeConsumable = function(i) {
   consumables.splice(i, 1);
+  if (!consumables.length) consumables.push({ name: '', qty: 1 });
   renderConsumables();
 };
 
 function renderConsumables() {
   const box = document.getElementById('consumables');
   box.innerHTML = '';
-  let dl = document.getElementById('consumable-datalist');
-  if (!dl) {
-    dl = document.createElement('datalist');
-    dl.id = 'consumable-datalist';
-    document.body.appendChild(dl);
-  }
-  dl.innerHTML = consumableList.map(x => `<option value="${x.name.replace(/"/g,'&quot;')}">`).join('');
   consumables.forEach((c, i) => {
     const found = consumableList.find(x => x.name === c.name);
-    const isNew = c.name && !found;
     const row = document.createElement('div');
     row.className = 'consumable-row';
     row.innerHTML = `
       <div class="row-top">
-        <input list="consumable-datalist" placeholder="🔍 输入耗材名搜索（库里没有可直接填）..." value="${c.name||''}" oninput="onCChange(${i}, this.value)">
-        <span class="price-tag" id="price-${i}"></span>
+        <div class="pick-input" style="flex:1" onclick="openPicker('consumable', ${i})">
+          ${c.name
+            ? `<span class="cname">${c.name}</span>`
+            : `<span class="pick-ph">点击选择耗材</span>`}
+          ${found ? `<span class="price-tag">¥${found.price}/${found.unit}</span>` : ''}
+        </div>
       </div>
       <div class="row-bottom">
         <input type="number" step="0.5" min="0" value="${c.qty}" onchange="onQtyChange(${i}, this.value)" placeholder="用量">
-        <span class="unit-tag" id="unit-${i}"></span>
+        <span class="unit-tag">${found ? found.unit : (c.unit || '')}</span>
         <button class="remove-btn" onclick="removeConsumable(${i})">删除</button>
       </div>
-      ${isNew ? `
+      ${c.name && !found ? `
       <div class="row-new">
-        <div class="new-tip">🆕 库中无此耗材，请填单位与单价</div>
+        <div class="new-tip">🆕 库中无此耗材，提交后自动入库</div>
         <div class="row-bottom">
           <input placeholder="单位，如 个/包/米" value="${c.unit||''}" onchange="onNewField(${i},'unit',this.value)" style="flex:1">
           <input type="number" step="0.01" placeholder="单价" value="${c.price||''}" onchange="onNewField(${i},'price',parseFloat(this.value)||0)" style="flex:1">
@@ -228,40 +263,102 @@ function renderConsumables() {
       </div>` : ''}
     `;
     box.appendChild(row);
-    if (found) updatePriceTag(i);
   });
   calcTotal();
 }
+
+/* ============ 选择弹层 ============ */
+let pickerType = 'worker', pickerIndex = -1;
+
+window.openPicker = function(type, index) {
+  pickerType = type;
+  pickerIndex = index;
+  const mask = document.getElementById('pickerMask');
+  mask.style.display = 'flex';
+  const s = document.getElementById('pickerSearch');
+  s.value = '';
+  s.placeholder = type === 'worker' ? '搜索姓名...' : '搜索耗材名称...';
+  renderPickerList('');
+  const foot = document.getElementById('pickerFoot');
+  foot.innerHTML = type === 'consumable'
+    ? '<button onclick="showManual()">＋ 库里没有？手动添加新耗材</button>'
+    : '';
+  setTimeout(() => s.focus(), 80);
+};
+
+window.closePicker = function() {
+  document.getElementById('pickerMask').style.display = 'none';
+};
+
+window.renderPickerList = function(q) {
+  q = (q || '').trim().toLowerCase();
+  const box = document.getElementById('pickerList');
+  if (pickerType === 'worker') {
+    const list = WORKERS.filter(w => !q || w.toLowerCase().includes(q));
+    box.innerHTML = list.length
+      ? list.map(w => `<div class="picker-item" onclick="pickWorker('${w}')">${w}</div>`).join('')
+      : '<div class="picker-empty">没找到这个人</div>';
+  } else {
+    const list = consumableList
+      .filter(c => !q || (c.name || '').toLowerCase().includes(q) || (c.spec || '').toLowerCase().includes(q))
+      .slice(0, 200);
+    box.innerHTML = list.length
+      ? list.map(c => `<div class="picker-item" onclick="pickConsumable(${c.id})">
+          <span class="ptag">¥${c.price || 0}/${c.unit || ''}</span>${c.name}
+          ${c.spec ? `<div class="sub">${String(c.spec).substring(0, 45)}</div>` : ''}
+        </div>`).join('')
+      : '<div class="picker-empty">库中没找到，点下方"手动添加新耗材"</div>';
+  }
+};
+
+window.pickWorker = function(w) {
+  document.getElementById('worker').value = w;
+  const t = document.getElementById('workerText');
+  t.textContent = w;
+  t.className = 'cname';
+  closePicker();
+};
+
+window.pickConsumable = function(id) {
+  const c = consumableList.find(x => x.id === id);
+  if (c && pickerIndex >= 0) {
+    consumables[pickerIndex] = { name: c.name, qty: consumables[pickerIndex].qty || 1, unit: c.unit, price: c.price };
+  }
+  closePicker();
+  renderConsumables();
+};
+
+window.showManual = function() {
+  document.getElementById('pickerList').innerHTML = `
+    <div class="manual-form">
+      <input id="mName" placeholder="耗材名称，如 生料带" autocomplete="off">
+      <div class="row2">
+        <input id="mUnit" placeholder="单位，如 个 / 包 / 米" autocomplete="off">
+        <input id="mPrice" type="number" step="0.01" placeholder="单价" autocomplete="off">
+      </div>
+      <button class="save" onclick="saveManual()">确认添加</button>
+    </div>`;
+  document.getElementById('pickerFoot').innerHTML = '<button onclick="openPicker(\'consumable\', ' + pickerIndex + ')">← 返回耗材列表</button>';
+  document.getElementById('pickerSearch').value = '';
+  setTimeout(() => document.getElementById('mName').focus(), 80);
+};
+
+window.saveManual = function() {
+  const name = document.getElementById('mName').value.trim();
+  const unit = document.getElementById('mUnit').value.trim() || '个';
+  const price = parseFloat(document.getElementById('mPrice').value) || 0;
+  if (!name) { showToast('请填写耗材名称'); return; }
+  if (pickerIndex >= 0) {
+    consumables[pickerIndex] = { name, qty: consumables[pickerIndex].qty || 1, unit, price };
+  }
+  closePicker();
+  renderConsumables();
+};
 
 window.onNewField = function(i, field, val) {
   consumables[i][field] = val;
   calcTotal();
 };
-
-window.onCChange = function(i, val) {
-  const found = consumableList.find(x => x.name === val);
-  consumables[i].name = found ? found.name : val;
-  if (found) { consumables[i].unit = found.unit; consumables[i].price = found.price; }
-  // 重新渲染以显示/隐藏"新增耗材"字段
-  const needRerender = (!!found) === (consumables[i].isNewRow === false);
-  consumables[i].isNewRow = !found && !!val;
-  renderConsumables();
-  // 保持输入焦点与光标
-  const inputs = document.querySelectorAll('.consumable-row');
-  if (inputs[i]) {
-    const inp = inputs[i].querySelector('.row-top input');
-    if (inp && document.activeElement !== inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-  }
-};
-
-function updatePriceTag(i) {
-  const c = consumables[i];
-  const found = consumableList.find(x => x.name === c.name);
-  if (found) {
-    document.getElementById(`price-${i}`).textContent = `¥${found.price}/${found.unit}`;
-    document.getElementById(`unit-${i}`).textContent = found.unit;
-  }
-}
 
 window.onQtyChange = function(i, v) {
   consumables[i].qty = parseFloat(v) || 0;
@@ -375,7 +472,11 @@ window.submit = async function() {
     document.getElementById('content').value = '';
     consumables = [];
     photoFiles = [];
-    renderConsumables();
+    window.addConsumable();
+    document.getElementById('worker').value = '';
+    const wt = document.getElementById('workerText');
+    wt.textContent = '点击选择作业人员';
+    wt.className = 'pick-ph';
     document.getElementById('photoRow').innerHTML = '<div class="photo-add" onclick="document.getElementById(\'photoInput\').click()">+</div>';
     document.getElementById('photoInput').value = '';
   } catch (e) {
