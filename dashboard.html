@@ -283,36 +283,48 @@ window.printWeek = printWeek;
 
 function renderLib() {
   const q = (document.getElementById('searchLib').value||'').toLowerCase();
-  const list = consumables.filter(c => !q || (c.name||'').toLowerCase().includes(q) || (c.spec||'').toLowerCase().includes(q));
+  const list = consumables
+    .filter(c => !q || (c.name||'').toLowerCase().includes(q) || (c.spec||'').toLowerCase().includes(q))
+    .sort((a, b) => {
+      const an = (a.note||'').trim() ? 0 : 1;
+      const bn = (b.note||'').trim() ? 0 : 1;
+      if (an !== bn) return an - bn;
+      return String(a.name||'').localeCompare(String(b.name||''), 'zh-Hans-CN');
+    });
   document.getElementById('libTable').innerHTML = `
     <table>
       <colgroup>
-        <col style="width:18%"><col style="width:38%"><col style="width:6%"><col style="width:8%">
-        <col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:6%">
+        <col style="width:17%"><col style="width:30%"><col style="width:5%"><col style="width:7%"><col style="width:10%">
+        <col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:4%">
       </colgroup>
       <tr>
         <th>名称</th><th>规格</th><th>单位</th><th>单价(元)</th>
+        <th style="background:#fff4e6">备注</th>
         <th colspan="3" style="text-align:center;background:#e8f0fe">库存量</th>
         <th></th>
       </tr>
       <tr>
-        <th></th><th></th><th></th><th></th>
+        <th></th><th></th><th></th><th></th><th></th>
         <th style="font-size:10px;color:#666">银高分输站</th>
         <th style="font-size:10px;color:#666">北海首站</th>
         <th style="font-size:10px;color:#666">鲁北分输站</th>
         <th></th>
       </tr>
-      ${list.map(c => `
-        <tr>
-          <td><input value="${c.name||''}" onchange="upd(${c.id},'name',this.value)"></td>
+      ${list.map(c => {
+        const isNew = (c.note||'').trim() !== '';
+        return `
+        <tr style="${isNew ? 'background:#fffaf2' : ''}">
+          <td><input value="${(c.name||'').replace(/"/g,'&quot;')}" onchange="upd(${c.id},'name',this.value)"></td>
           <td><input value="${(c.spec||'').replace(/"/g,'&quot;')}" onchange="upd(${c.id},'spec',this.value)"></td>
           <td><input value="${c.unit||''}" style="width:50px" onchange="upd(${c.id},'unit',this.value)"></td>
           <td><input value="${c.price||0}" type="number" step="0.01" style="width:70px" onchange="upd(${c.id},'price',parseFloat(this.value)||0)"></td>
+          <td><input value="${(c.note||'').replace(/"/g,'&quot;')}" placeholder="—" style="${isNew ? 'color:#e67e22;font-weight:600' : ''}" onchange="upd(${c.id},'note',this.value)"></td>
           <td><input value="${c.qty_yin||0}" type="number" style="width:60px" onchange="upd(${c.id},'qty_yin',parseFloat(this.value)||0)"></td>
           <td><input value="${c.qty_beihai||0}" type="number" style="width:60px" onchange="upd(${c.id},'qty_beihai',parseFloat(this.value)||0)"></td>
           <td><input value="${c.qty_lubei||0}" type="number" style="width:60px" onchange="upd(${c.id},'qty_lubei',parseFloat(this.value)||0)"></td>
           <td><button class="btn btn-danger btn-sm" onclick="delRow(${c.id})">删</button></td>
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
     </table>`;
 }
 
@@ -342,7 +354,7 @@ async function delRow(id) {
 window.delRow = delRow;
 
 async function addConsumableRow() {
-  const { data, error } = await supabase.from('consumables').insert({ name: '新耗材-点这里改名', spec: '', unit: '个', price: 0, active: true }).select();
+  const { data, error } = await supabase.from('consumables').insert({ name: '新耗材-点这里改名', spec: '', unit: '个', price: 0, note: '新增', active: true }).select();
   if (error) { alert('新增失败: ' + error.message); return; }
   consumables.unshift(data[0]);
   renderLib();
