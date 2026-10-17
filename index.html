@@ -10,6 +10,9 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
 .header h1 { font-size: 18px; font-weight: 600; }
 .header .sub { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+.back-dash { display: none; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #fff; font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,0.65); padding: 5px 12px; border-radius: 14px; }
+.back-dash:hover { background: rgba(255,255,255,0.18); }
+@media (min-width: 768px) { .back-dash { display: inline-block; } }
 .card { background: #fff; margin: 12px; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .card h2 { font-size: 15px; color: #1e3c72; margin-bottom: 12px; padding-left: 8px; border-left: 3px solid #1e3c72; }
 label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
@@ -80,6 +83,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 <body>
 
 <div class="header">
+  <a class="back-dash" href="dashboard.html">← 返回驾驶舱</a>
   <h1>站场小管家 · 成本管控</h1>
   <div class="sub">作业登记 · 生产运行部</div>
 </div>
