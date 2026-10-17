@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>站场小管家 · 作业登记</title>
+<title>站场小管家 · 成本管控</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #333; padding-bottom: 140px; }
@@ -62,6 +62,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .picker-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .picker-item { padding: 13px 16px; border-bottom: 1px solid #f4f6fa; font-size: 15px; color: #1f2a44; }
 .picker-item:active { background: #eaf0ff; }
+.picker-item.picked { background: #eef4ff; color: #1e3c72; font-weight: 600; }
+.picker-item .chk { display: inline-block; width: 20px; color: #2a5298; font-weight: 700; }
 .picker-item .sub { font-size: 11px; color: #98a2b3; margin-top: 3px; word-break: break-all; }
 .picker-item .ptag { float: right; color: #e67e22; font-size: 12px; font-weight: 600; margin-left: 8px; }
 .picker-empty { padding: 40px 16px; text-align: center; color: #9aa4b5; font-size: 14px; }
@@ -78,8 +80,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 <body>
 
 <div class="header">
-  <h1>站场小管家 · 作业登记</h1>
-  <div class="sub">生产运行部</div>
+  <h1>站场小管家 · 成本管控</h1>
+  <div class="sub">作业登记 · 生产运行部</div>
 </div>
 
 <div class="card">
@@ -255,7 +257,7 @@ function renderConsumables() {
       </div>
       ${c.name && !found ? `
       <div class="row-new">
-        <div class="new-tip">🆕 库中无此耗材，提交后自动入库</div>
+        <div class="new-tip">🆕 库中无此耗材，提交后自动入库，初始库存 ${c.stock || 0}</div>
         <div class="row-bottom">
           <input placeholder="单位，如 个/包/米" value="${c.unit||''}" onchange="onNewField(${i},'unit',this.value)" style="flex:1">
           <input type="number" step="0.01" placeholder="单价" value="${c.price||''}" onchange="onNewField(${i},'price',parseFloat(this.value)||0)" style="flex:1">
@@ -268,23 +270,32 @@ function renderConsumables() {
 }
 
 /* ============ 选择弹层 ============ */
-let pickerType = 'worker', pickerIndex = -1;
+let pickerType = 'worker', pickerIndex = -1, pickedWorkers = [];
 
 window.openPicker = function(type, index) {
   pickerType = type;
   pickerIndex = index;
+  if (type === 'worker') {
+    pickedWorkers = (document.getElementById('worker').value || '').split('、').filter(Boolean);
+  }
   const mask = document.getElementById('pickerMask');
   mask.style.display = 'flex';
   const s = document.getElementById('pickerSearch');
   s.value = '';
-  s.placeholder = type === 'worker' ? '搜索姓名...' : '搜索耗材名称...';
+  s.placeholder = type === 'worker' ? '搜索姓名（可多选）...' : '搜索耗材名称...';
   renderPickerList('');
-  const foot = document.getElementById('pickerFoot');
-  foot.innerHTML = type === 'consumable'
-    ? '<button onclick="showManual()">＋ 库里没有？手动添加新耗材</button>'
-    : '';
   setTimeout(() => s.focus(), 80);
 };
+
+function updateFoot() {
+  const foot = document.getElementById('pickerFoot');
+  if (pickerType === 'worker') {
+    foot.innerHTML = '<button onclick="confirmWorkers()">确定' +
+      (pickedWorkers.length ? '（已选 ' + pickedWorkers.length + ' 人）' : '') + '</button>';
+  } else {
+    foot.innerHTML = '<button onclick="showManual()">＋ 库里没有？手动添加新耗材</button>';
+  }
+}
 
 window.closePicker = function() {
   document.getElementById('pickerMask').style.display = 'none';
@@ -296,7 +307,10 @@ window.renderPickerList = function(q) {
   if (pickerType === 'worker') {
     const list = WORKERS.filter(w => !q || w.toLowerCase().includes(q));
     box.innerHTML = list.length
-      ? list.map(w => `<div class="picker-item" onclick="pickWorker('${w}')">${w}</div>`).join('')
+      ? list.map(w => {
+          const on = pickedWorkers.includes(w);
+          return `<div class="picker-item${on ? ' picked' : ''}" onclick="toggleWorker('${w}')"><span class="chk">${on ? '✓' : ''}</span>${w}</div>`;
+        }).join('')
       : '<div class="picker-empty">没找到这个人</div>';
   } else {
     const list = consumableList
@@ -307,15 +321,28 @@ window.renderPickerList = function(q) {
           <span class="ptag">¥${c.price || 0}/${c.unit || ''}</span>${c.name}
           ${c.spec ? `<div class="sub">${String(c.spec).substring(0, 45)}</div>` : ''}
         </div>`).join('')
-      : '<div class="picker-empty">库中没找到，点下方"手动添加新耗材"</div>';
+      : '<div class="picker-empty">库中没找到，点下方“手动添加新耗材”</div>';
   }
+  updateFoot();
 };
 
-window.pickWorker = function(w) {
-  document.getElementById('worker').value = w;
+window.toggleWorker = function(w) {
+  const i = pickedWorkers.indexOf(w);
+  if (i >= 0) pickedWorkers.splice(i, 1); else pickedWorkers.push(w);
+  renderPickerList(document.getElementById('pickerSearch').value);
+};
+
+window.confirmWorkers = function() {
   const t = document.getElementById('workerText');
-  t.textContent = w;
-  t.className = 'cname';
+  if (pickedWorkers.length) {
+    document.getElementById('worker').value = pickedWorkers.join('、');
+    t.textContent = pickedWorkers.join('、');
+    t.className = 'cname';
+  } else {
+    document.getElementById('worker').value = '';
+    t.textContent = '点击选择作业人员';
+    t.className = 'pick-ph';
+  }
   closePicker();
 };
 
@@ -336,6 +363,7 @@ window.showManual = function() {
         <input id="mUnit" placeholder="单位，如 个 / 包 / 米" autocomplete="off">
         <input id="mPrice" type="number" step="0.01" placeholder="单价" autocomplete="off">
       </div>
+      <input id="mStock" type="number" step="0.5" min="0" placeholder="总数量（现有库存，留空按 0）" autocomplete="off">
       <button class="save" onclick="saveManual()">确认添加</button>
     </div>`;
   document.getElementById('pickerFoot').innerHTML = '<button onclick="openPicker(\'consumable\', ' + pickerIndex + ')">← 返回耗材列表</button>';
@@ -347,9 +375,10 @@ window.saveManual = function() {
   const name = document.getElementById('mName').value.trim();
   const unit = document.getElementById('mUnit').value.trim() || '个';
   const price = parseFloat(document.getElementById('mPrice').value) || 0;
+  const stock = parseFloat(document.getElementById('mStock').value) || 0;
   if (!name) { showToast('请填写耗材名称'); return; }
   if (pickerIndex >= 0) {
-    consumables[pickerIndex] = { name, qty: consumables[pickerIndex].qty || 1, unit, price };
+    consumables[pickerIndex] = { name, qty: consumables[pickerIndex].qty || 1, unit, price, stock };
   }
   closePicker();
   renderConsumables();
@@ -399,8 +428,10 @@ window.submit = async function() {
   btn.disabled = true;
   try {
     const total = calcTotal();
+    const station = document.getElementById('station').value;
+    const qtyField = station.includes('银高') ? 'qty_yin' : station.includes('北海') ? 'qty_beihai' : 'qty_lubei';
 
-    // 库里没有的耗材，先自动新增到耗材库
+    // 库里没有的耗材，先自动新增到耗材库（初始库存取"总数量"）
     const newOnes = consumables.filter(c => c.name && !consumableList.find(x => x.name === c.name));
     for (const n of newOnes) {
       const base = {
@@ -411,6 +442,7 @@ window.submit = async function() {
         active: true,
         qty_yin: 0, qty_beihai: 0, qty_lubei: 0
       };
+      base[qtyField] = parseFloat(n.stock) || 0;
       let res = await window.supabase.from('consumables').insert({ ...base, note: '新增' }).select();
       if (res.error) res = await window.supabase.from('consumables').insert(base).select();
       const { data, error } = res;
@@ -443,7 +475,6 @@ window.submit = async function() {
       photoUrls.push(data.publicUrl);
     }
 
-    const station = document.getElementById('station').value;
     const record = {
       worker: document.getElementById('worker').value,
       station,
@@ -460,14 +491,15 @@ window.submit = async function() {
     const { error } = await window.supabase.from('records').insert(record);
     if (error) throw new Error('保存失败: ' + error.message);
 
-    // 自动扣库存
-    const qtyField = station.includes('银高') ? 'qty_yin' : station.includes('北海') ? 'qty_beihai' : 'qty_lubei';
+    // 自动扣库存（扣完不低于 0，避免出现负数）
     for (const it of items) {
       const found = consumableList.find(x => x.name === it.name);
       if (found) {
+        const left = Math.max(0, (found[qtyField] || 0) - it.qty);
         await window.supabase.from('consumables')
-          .update({ [qtyField]: (found[qtyField]||0) - it.qty })
+          .update({ [qtyField]: left })
           .eq('id', found.id);
+        found[qtyField] = left;
       }
     }
 
