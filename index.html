@@ -31,6 +31,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 .photo-add { width: 70px; height: 70px; border: 2px dashed #bbb; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 24px; background: #fafafa; }
 .quick-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .quick-phrases button { background: #e8f0fe; color: #1e3c72; border: 1px solid #c8d8f0; padding: 5px 10px; border-radius: 14px; font-size: 12px; }
+.row-new { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e4f5; }
+.row-new .new-tip { font-size: 11px; color: #e67e22; margin-bottom: 6px; }
 .total-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 12px; z-index: 10; }
 .total-bar .total { flex: 1; }
 .total-bar .total .label { font-size: 12px; color: #888; }
@@ -46,26 +48,23 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
 <body>
 
 <div class="header">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <a href="index.html" style="color:#fff;font-size:12px;text-decoration:none;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:12px">作业登记</a>
-    <a href="dashboard.html" style="color:#fff;font-size:12px;text-decoration:none;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:12px">驾驶舱</a>
-  </div>
   <h1>站场小管家 · 作业登记</h1>
-  <div class="sub">北海首站 / 鲁北分输站 · 生产运行部</div>
+  <div class="sub">生产运行部</div>
 </div>
 
 <div class="card">
   <h2>基本信息</h2>
   <div class="form-row">
     <label>作业人员</label>
-    <select id="worker"></select>
+    <input list="worker-list" id="worker" placeholder="🔍 输入姓名搜索..." autocomplete="off">
+    <datalist id="worker-list"></datalist>
   </div>
   <div class="grid2">
     <div class="form-row">
       <label>所属站场</label>
-      <select id="station">
-        <option value="鲁北分输站">鲁北分输站</option>
+      <select id="station" onchange="onStationChange()">
         <option value="北海首站">北海首站</option>
+        <option value="鲁北分输站" selected>鲁北分输站</option>
         <option value="银高分输站">银高分输站</option>
         <option value="环海门站">环海门站</option>
         <option value="马山子分输清管站">马山子分输清管站</option>
@@ -75,14 +74,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2a5298
     </div>
     <div class="form-row">
       <label>作业区域</label>
-      <select id="area">
-        <option>综合楼</option><option>进站区</option><option>过滤区</option>
-        <option>收发球筒区</option><option>计量区</option><option>调压区</option>
-        <option>综合设备间</option><option>压缩机区</option><option>空压机区</option>
-        <option>高压配电间</option><option>低压配电间</option><option>机柜间</option>
-        <option>UPS间</option><option>供热源热泵区</option><option>柴油发电间</option>
-        <option>消防罐区</option><option>其他区域</option>
-      </select>
+      <select id="area"></select>
     </div>
   </div>
   <div class="grid2">
@@ -158,12 +150,32 @@ PHRASES.forEach(p => {
   qp.appendChild(b);
 });
 
-const workerSel = document.getElementById('worker');
+const workerSel = document.getElementById('worker-list');
 WORKERS.forEach(w => {
   const opt = document.createElement('option');
-  opt.value = opt.text = w;
+  opt.value = w;
   workerSel.appendChild(opt);
 });
+
+// 各站场作业区域
+const AREA_MAP = {
+  '北海首站': ['工艺区','综合设备间','综合值班室','维修厂房','其他区域'],
+  '鲁北分输站': ['工艺区','综合设备间','综合值班室','其他区域'],
+  '银高分输站': ['工艺区','综合设备间','压缩机区','综合值班室','维修厂房','其他区域'],
+  '环海门站': ['工艺区','综合设备间','综合值班室','其他区域'],
+  '马山子分输清管站': ['工艺区','综合设备间','综合值班室','其他区域'],
+  '棣丰阀室': ['工艺区','综合设备间','其他区域'],
+  '西小王阀室': ['工艺区','综合设备间','其他区域']
+};
+
+function onStationChange() {
+  const st = document.getElementById('station').value;
+  const areas = AREA_MAP[st] || ['工艺区','综合设备间','综合值班室','其他区域'];
+  const sel = document.getElementById('area');
+  sel.innerHTML = areas.map(a => `<option>${a}</option>`).join('');
+}
+window.onStationChange = onStationChange;
+onStationChange();
 
 async function loadConsumables() {
   const { data, error } = await window.supabase
@@ -196,30 +208,54 @@ function renderConsumables() {
   }
   dl.innerHTML = consumableList.map(x => `<option value="${x.name.replace(/"/g,'&quot;')}">`).join('');
   consumables.forEach((c, i) => {
+    const found = consumableList.find(x => x.name === c.name);
+    const isNew = c.name && !found;
     const row = document.createElement('div');
     row.className = 'consumable-row';
     row.innerHTML = `
       <div class="row-top">
-        <input list="consumable-datalist" placeholder="🔍 输入耗材名搜索..." value="${c.name||''}" onchange="onCChange(${i}, this.value)">
+        <input list="consumable-datalist" placeholder="🔍 输入耗材名搜索（库里没有可直接填）..." value="${c.name||''}" oninput="onCChange(${i}, this.value)">
         <span class="price-tag" id="price-${i}"></span>
       </div>
       <div class="row-bottom">
-        <input type="number" step="0.5" min="0" value="${c.qty}" onchange="onQtyChange(${i}, this.value)">
+        <input type="number" step="0.5" min="0" value="${c.qty}" onchange="onQtyChange(${i}, this.value)" placeholder="用量">
         <span class="unit-tag" id="unit-${i}"></span>
         <button class="remove-btn" onclick="removeConsumable(${i})">删除</button>
       </div>
+      ${isNew ? `
+      <div class="row-new">
+        <div class="new-tip">🆕 库中无此耗材，请填单位与单价</div>
+        <div class="row-bottom">
+          <input placeholder="单位，如 个/包/米" value="${c.unit||''}" onchange="onNewField(${i},'unit',this.value)" style="flex:1">
+          <input type="number" step="0.01" placeholder="单价" value="${c.price||''}" onchange="onNewField(${i},'price',parseFloat(this.value)||0)" style="flex:1">
+        </div>
+      </div>` : ''}
     `;
     box.appendChild(row);
-    if (c.name) updatePriceTag(i);
+    if (found) updatePriceTag(i);
   });
   calcTotal();
 }
 
+window.onNewField = function(i, field, val) {
+  consumables[i][field] = val;
+  calcTotal();
+};
+
 window.onCChange = function(i, val) {
   const found = consumableList.find(x => x.name === val);
   consumables[i].name = found ? found.name : val;
-  updatePriceTag(i);
-  calcTotal();
+  if (found) { consumables[i].unit = found.unit; consumables[i].price = found.price; }
+  // 重新渲染以显示/隐藏"新增耗材"字段
+  const needRerender = (!!found) === (consumables[i].isNewRow === false);
+  consumables[i].isNewRow = !found && !!val;
+  renderConsumables();
+  // 保持输入焦点与光标
+  const inputs = document.querySelectorAll('.consumable-row');
+  if (inputs[i]) {
+    const inp = inputs[i].querySelector('.row-top input');
+    if (inp && document.activeElement !== inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
 };
 
 function updatePriceTag(i) {
@@ -240,7 +276,8 @@ function calcTotal() {
   let total = 0;
   consumables.forEach(c => {
     const found = consumableList.find(x => x.name === c.name);
-    if (found) total += found.price * c.qty;
+    const price = found ? found.price : (c.price || 0);
+    total += price * c.qty;
   });
   document.getElementById('total').textContent = total.toFixed(2);
   return total;
@@ -269,15 +306,31 @@ window.submit = async function() {
   btn.disabled = true;
   try {
     const total = calcTotal();
+
+    // 库里没有的耗材，先自动新增到耗材库
+    const newOnes = consumables.filter(c => c.name && !consumableList.find(x => x.name === c.name));
+    for (const n of newOnes) {
+      const { data, error } = await window.supabase.from('consumables').insert({
+        name: n.name,
+        spec: '',
+        unit: n.unit || '个',
+        price: n.price || 0,
+        active: true,
+        qty_yin: 0, qty_beihai: 0, qty_lubei: 0
+      }).select();
+      if (!error && data && data[0]) consumableList.push(data[0]);
+    }
+
     const items = consumables.filter(c => c.name).map(c => {
       const found = consumableList.find(x => x.name === c.name);
+      const price = found ? found.price : (c.price || 0);
       return {
         name: c.name,
         spec: found ? found.spec : '',
-        unit: found ? found.unit : '',
-        price: found ? found.price : 0,
+        unit: found ? found.unit : (c.unit || ''),
+        price: price,
         qty: c.qty,
-        amount: found ? found.price * c.qty : 0
+        amount: price * c.qty
       };
     });
 
