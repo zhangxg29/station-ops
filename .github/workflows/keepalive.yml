@@ -2,7 +2,8 @@ name: Supabase Keepalive
 
 on:
   schedule:
-  - cron: '13 */6 * * *'   # UTC每6小时第13分，错开整点高峰（北京02:13/08:13/14:13/20:13）  workflow_dispatch: {}
+    - cron: '13 */6 * * *'   # UTC每6小时第13分，错开整点高峰（北京02:13/08:13/14:13/20:13）
+  workflow_dispatch: {}
 
 jobs:
   ping:
