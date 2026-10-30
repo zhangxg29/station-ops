@@ -1,0 +1,26 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # UTC 每6小时一次（北京时间 02/08/14/20 点）
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping database (keep alive)
+        env:
+          SUPABASE_URL: https://eodmvigzljdygwulushv.supabase.co
+          SUPABASE_KEY: sb_publishable_PgylY9vdh6PR-xvVzgkFGg_D_omBy52
+        run: |
+          code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/records?select=id&limit=1")
+          echo "HTTP $code"
+          head -c 300 /tmp/resp.json; echo
+          if [ "$code" != "200" ] && [ "$code" != "206" ]; then
+            echo "心跳异常，状态码 $code"
+            exit 1
+          fi
