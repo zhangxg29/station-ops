@@ -63,10 +63,10 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
 <div class="filter-bar">
   <label>时间</label>
   <select id="range" onchange="render()">
-    <option value="month" selected>本月</option>
+    <option value="month">本月</option>
     <option value="week">本周</option>
     <option value="year">今年</option>
-    <option value="all">全部</option>
+    <option value="all" selected>全部</option>
   </select>
   <label>站场</label>
   <select id="fStation" onchange="render()">
@@ -84,7 +84,6 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
 </div>
 
 <div id="warnBar" style="background:#ffeaa7;color:#d35400;padding:8px 12px;font-size:13px;display:none"></div>
-<div id="debugBar" style="background:#dfe6e9;color:#2d3436;padding:8px 12px;font-size:12px;display:none"></div>
 
 <div class="tabs">
   <button class="active" onclick="switchTab('dash', this)">📊 驾驶舱</button>
@@ -153,13 +152,8 @@ async function loadData() {
       supabase.from('records').select('*').order('created_at', { ascending: false }),
       supabase.from('consumables').select('*').order('name')
     ]);
-    if (r1.error) alert('records 加载失败: ' + r1.error.message);
-    if (r2.error) alert('consumables 加载失败: ' + r2.error.message);
     records = r1.data || [];
     consumables = r2.data || [];
-    const dbg = document.getElementById('debugBar');
-    if (dbg) dbg.style.display = 'block';
-    if (dbg) dbg.textContent = '调试: records=' + records.length + ' 条, consumables=' + consumables.length + ' 条, range=' + document.getElementById('range').value;
   } catch (e) {
     alert('数据加载失败: ' + e.message);
   }
