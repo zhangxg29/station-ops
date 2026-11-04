@@ -152,6 +152,8 @@ async function loadData() {
       supabase.from('records').select('*').order('created_at', { ascending: false }),
       supabase.from('consumables').select('*').order('name')
     ]);
+    if (r1.error) alert('records 加载失败: ' + r1.error.message);
+    if (r2.error) alert('consumables 加载失败: ' + r2.error.message);
     records = r1.data || [];
     consumables = r2.data || [];
   } catch (e) {
