@@ -411,6 +411,7 @@ function loadThumb(url, maxW = 260, quality = 0.7) {
     const finish = v => { if (!done) { done = true; clearTimeout(timer); resolve(v); } };
     const timer = setTimeout(() => finish(''), 8000);
     const im = new Image();
+    im.crossOrigin = 'anonymous';
     im.onload = () => {
       try {
         let w = im.width, h = im.height;
@@ -434,9 +435,10 @@ async function buildPdfReport(data, label) {
   const cards = data.map((r, idx) => {
     const photos = getPhotoList(r);
     const pics = photos.length
-      ? `<div class="pics">${photos.map(u => urlThumbs[u]
-          ? `<img src="${urlThumbs[u]}">`
-          : '<div class="ph-fail">图片加载失败</div>').join('')}</div>`
+      ? `<div class="pics">${photos.map(u => {
+          const src = urlThumbs[u] || u;
+          return `<img src="${src}">`;
+        }).join('')}</div>`
       : '<div class="meta">无照片</div>';
     const items = (r.items||[]).map(i => `${i.name}×${i.qty}${i.unit||''}`).join('；');
     return `<div class="card">
