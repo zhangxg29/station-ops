@@ -409,6 +409,37 @@ function calcTotal() {
   return total;
 }
 
+// 上传前压缩：最长边 1280，JPEG 0.75
+async function compressImage(file) {
+  const MAX = 1280, QUALITY = 0.75;
+  try {
+    const dataUrl = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = dataUrl;
+    });
+    let w = img.width, h = img.height;
+    if (w > MAX || h > MAX) {
+      const k = Math.min(MAX / w, MAX / h);
+      w = Math.round(w * k); h = Math.round(h * k);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', QUALITY));
+    return blob || file;
+  } catch (e) {
+    return file; // 压缩失败则原样上传
+  }
+}
+
 window.onPhoto = function(input) {
   const files = Array.from(input.files || []);
   files.forEach(f => {
@@ -466,14 +497,14 @@ window.submit = async function() {
       };
     });
 
-    // 多图上传
+    // 多图上传（先压缩再上传，节省存储空间）
     let photoUrls = [];
     for (const f of photoFiles) {
-      const ext = f.name.split('.').pop();
-      const path = `records/${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`;
+      const blob = await compressImage(f);
+      const path = `records/${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`;
       const { error: upErr } = await window.supabase.storage
         .from('photos')
-        .upload(path, f, { upsert: true });
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
       if (upErr) continue;
       const { data } = window.supabase.storage.from('photos').getPublicUrl(path);
       photoUrls.push(data.publicUrl);
