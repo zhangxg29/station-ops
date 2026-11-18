@@ -80,7 +80,8 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
     <option>西小王阀室</option>
   </select>
   <button class="btn btn-primary" onclick="exportWeek()">📥 导出周报表(Excel)</button>
-  <button class="btn" onclick="printWeek()">🖨️ 打印周报</button>
+  <button class="btn" onclick="printWeek()">🖨️ 导出PDF周报(带照片)</button>
+  <button class="btn" onclick="cleanOldRecords()">🧹 清理旧记录</button>
 </div>
 
 <div id="warnBar" style="background:#ffeaa7;color:#d35400;padding:8px 12px;font-size:13px;display:none"></div>
@@ -255,8 +256,24 @@ function render() {
     </div>`).join('');
 }
 
+function urlToPath(url) {
+  if (!url) return null;
+  const marker = '/photos/';
+  const i = url.indexOf(marker);
+  return i >= 0 ? url.slice(i + marker.length) : null;
+}
+
+async function deletePhotosOf(record) {
+  const paths = getPhotoList(record).map(urlToPath).filter(Boolean);
+  if (!paths.length) return '';
+  const { error } = await supabase.storage.from('photos').remove(paths);
+  return error ? error.message : '';
+}
+
 async function delRecord(id) {
-  if (!confirm('确定删除这条记录？')) return;
+  if (!confirm('确定删除这条记录？照片将一并删除，不可恢复。')) return;
+  const rec = records.find(r => r.id === id);
+  const photoErr = rec ? await deletePhotosOf(rec) : '';
   const { data, error } = await supabase.from('records').delete().eq('id', id).select();
   if (error) { alert('删除失败: ' + error.message); return; }
   if (!data || !data.length) {
@@ -265,20 +282,90 @@ async function delRecord(id) {
   }
   records = records.filter(r => r.id !== id);
   render();
+  if (photoErr) alert('记录已删除，但部分照片清理失败：' + photoErr);
 }
 window.delRecord = delRecord;
 
-function printWeek() {
-  const data = filterByRange();
-  let html = `<html><head><meta charset="utf-8"><style>body{font-family:微软雅黑;font-size:12px;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px}th{background:#e8f0fe}</style></head><body>`;
-  html += `<h1>站场小管家 · 周作业报表</h1><p>导出时间：${new Date().toLocaleString()}</p>`;
-  html += `<table><tr><th>日期</th><th>人员</th><th>站场</th><th>区域</th><th>类别</th><th>时长</th><th>内容</th><th>耗材明细</th><th>金额</th></tr>`;
-  data.forEach(r => {
-    html += `<tr><td>${new Date(r.created_at).toLocaleDateString()}</td><td>${r.worker||''}</td><td>${r.station||''}</td><td>${r.area||''}</td><td>${r.category||''}</td><td>${r.duration||''}h</td><td>${r.content||''}</td><td>${(r.items||[]).map(i=>`${i.name}×${i.qty}`).join('；')}</td><td>${(r.total_amount||0).toFixed(2)}</td></tr>`;
+async function cleanOldRecords() {
+  const days = parseInt(prompt('保留最近多少天的记录？\n（早于该天数的记录连同照片将被删除）', '30'), 10);
+  if (isNaN(days) || days < 1) return;
+  const cutoff = new Date(Date.now() - days * 864e5);
+  const old = records.filter(r => new Date(r.created_at) < cutoff);
+  if (!old.length) { alert(`没有早于 ${days} 天的记录，无需清理。`); return; }
+  if (!confirm(`将删除 ${old.length} 条早于 ${days} 天的记录及其照片，此操作不可恢复。\n确定继续？`)) return;
+
+  let photoErr = '';
+  for (const rec of old) {
+    const e = await deletePhotosOf(rec);
+    if (e && !photoErr) photoErr = e;
+  }
+
+  const ids = old.map(r => r.id);
+  const { data, error } = await supabase.from('records').delete().in('id', ids).select();
+  if (error) { alert('记录删除失败: ' + error.message + '\n（可能未开放删除权限，需在 Supabase 配置）'); return; }
+  const removed = (data || []).length;
+  records = records.filter(r => !ids.includes(r.id));
+  render();
+  alert(`已删除 ${removed} 条记录。` + (photoErr ? `\n部分照片清理失败：${photoErr}` : '\n照片已一并删除。'));
+}
+window.cleanOldRecords = cleanOldRecords;
+
+function getPhotoList(r) {
+  return r.photo_urls || (r.photo_url ? [r.photo_url] : []);
+}
+
+function preloadImages(urls) {
+  const list = [...new Set(urls.filter(Boolean))];
+  if (!list.length) return Promise.resolve();
+  return new Promise(resolve => {
+    let done = 0;
+    const tick = () => { done++; if (done === list.length) resolve(); };
+    list.forEach(u => { const im = new Image(); im.onload = tick; im.onerror = tick; im.src = u; });
   });
+}
+
+async function printWeek() {
+  const data = filterByRange();
+  if (!data.length) { alert('当前筛选无数据'); return; }
+  const allUrls = [];
+  data.forEach(r => allUrls.push(...getPhotoList(r)));
+  await preloadImages(allUrls);
+
+  const cards = data.map((r, idx) => {
+    const photos = getPhotoList(r);
+    const pics = photos.length
+      ? `<div class="pics">${photos.map(u => `<img src="${u}">`).join('')}</div>`
+      : '<div class="meta">无照片</div>';
+    const items = (r.items||[]).map(i => `${i.name}×${i.qty}${i.unit||''}`).join('；');
+    return `<div class="card">
+      <div class="row"><b>${idx+1}. ${new Date(r.created_at).toLocaleString()}</b>　${r.worker||''}　${r.station||''}　${r.area||''}　${r.category||''}　${r.duration||''}h</div>
+      <div class="row meta">作业内容：${r.content||''}</div>
+      <div class="row meta">耗材明细：${items||'无'}</div>
+      <div class="row meta">金额：${(r.total_amount||0).toFixed(2)} 元</div>
+      ${pics}
+    </div>`;
+  }).join('');
   const total = data.reduce((s,r)=>s+(r.total_amount||0),0);
-  html += `<tr><td colspan="8" style="text-align:right;font-weight:bold">合计</td><td style="font-weight:bold">${total.toFixed(2)}</td></tr>`;
-  html += `</table><p style="margin-top:30px">站长签字：______________  日期：______________</p></body></html>`;
+
+  const html = `<html><head><meta charset="utf-8"><style>
+    body{font-family:微软雅黑;font-size:12px;padding:20px;color:#222}
+    h1{text-align:center;font-size:18px;margin:0 0 6px}
+    .sub{text-align:center;color:#666;margin-bottom:16px}
+    .card{border:1px solid #999;border-radius:6px;padding:10px;margin-bottom:12px;page-break-inside:avoid}
+    .row{margin:3px 0}
+    .meta{color:#444}
+    .pics{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .pics img{width:130px;height:100px;object-fit:cover;border:1px solid #ccc}
+    .sum{font-weight:bold;margin:10px 0}
+    .sign{margin-top:24px}
+  </style></head><body>
+    <h1>站场小管家 · 周作业报表（带照片）</h1>
+    <div class="sub">导出时间：${new Date().toLocaleString()}　共 ${data.length} 条记录</div>
+    ${cards}
+    <div class="sum">合计金额：${total.toFixed(2)} 元</div>
+    <div class="sign">站长签字：______________　　日期：______________</div>
+  </body></html>`;
+
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
