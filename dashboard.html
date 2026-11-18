@@ -38,6 +38,13 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 .record-item img { max-width: 90px; margin-top: 6px; border-radius: 4px; cursor: zoom-in; }
 .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 999; display: none; align-items: center; justify-content: center; }
 .lightbox img { max-width: 95%; max-height: 95%; }
+.modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: none; align-items: center; justify-content: center; }
+.modal-box { background: #fff; border-radius: 10px; padding: 18px; width: 300px; box-shadow: 0 6px 24px rgba(0,0,0,0.2); }
+.modal-box h3 { font-size: 15px; margin-bottom: 14px; color: #1e3c72; }
+.modal-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.modal-row label { width: 50px; font-size: 13px; color: #666; }
+.modal-row select { flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
 th, td { padding: 5px 4px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; }
 th { color: #888; font-weight: 500; font-size: 10px; }
@@ -80,7 +87,7 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
     <option>西小王阀室</option>
   </select>
   <button class="btn btn-primary" onclick="exportWeek()">📥 导出周报表(Excel)</button>
-  <button class="btn" onclick="printWeek()">🖨️ 导出PDF周报(带照片)</button>
+  <button class="btn" onclick="openPeriodModal()">🖨️ 导出PDF周报(带照片)</button>
   <button class="btn" onclick="cleanOldRecords()">🧹 清理旧记录</button>
 </div>
 
@@ -133,6 +140,33 @@ input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; f
 
 <div class="lightbox" id="lightbox" onclick="this.style.display='none'">
   <img id="lightboxImg">
+</div>
+
+<div class="modal-mask" id="periodModal">
+  <div class="modal-box">
+    <h3>导出报表（PDF 带照片）</h3>
+    <div class="modal-row">
+      <label>周期</label>
+      <select id="pType" onchange="onPeriodTypeChange()">
+        <option value="month">月度</option>
+        <option value="quarter">季度</option>
+        <option value="year">年度</option>
+      </select>
+    </div>
+    <div class="modal-row" id="pYearRow">
+      <label>年份</label><select id="pYear"></select>
+    </div>
+    <div class="modal-row" id="pMonthRow">
+      <label>月份</label><select id="pMonth"></select>
+    </div>
+    <div class="modal-row" id="pQuarterRow" style="display:none">
+      <label>季度</label><select id="pQuarter"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePeriodModal()">取消</button>
+      <button class="btn btn-primary" id="pOkBtn" onclick="confirmPeriodExport()">生成PDF</button>
+    </div>
+  </div>
 </div>
 
 <div id="savedTip" style="position:fixed;top:70px;right:20px;background:#1e3c72;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity 0.3s;z-index:200">✓ 已保存</div>
@@ -314,27 +348,95 @@ function getPhotoList(r) {
   return r.photo_urls || (r.photo_url ? [r.photo_url] : []);
 }
 
-function preloadImages(urls) {
-  const list = [...new Set(urls.filter(Boolean))];
-  if (!list.length) return Promise.resolve();
-  return new Promise(resolve => {
-    let done = 0;
-    const tick = () => { done++; if (done === list.length) resolve(); };
-    list.forEach(u => { const im = new Image(); im.onload = tick; im.onerror = tick; im.src = u; });
+// ===== PDF 周期选择（月 / 季 / 年）=====
+function periodYearOptions() {
+  const ys = records.map(r => new Date(r.created_at).getFullYear());
+  ys.push(new Date().getFullYear());
+  return [...new Set(ys)].sort((a, b) => b - a);
+}
+
+function openPeriodModal() {
+  if (!records.length) { alert('暂无记录'); return; }
+  const now = new Date();
+  const yrSel = document.getElementById('pYear');
+  yrSel.innerHTML = periodYearOptions().map(y => `<option value="${y}">${y}年</option>`).join('');
+  yrSel.value = now.getFullYear();
+  document.getElementById('pMonth').innerHTML = Array.from({length:12}, (_,i) => `<option value="${i+1}">${i+1}月</option>`).join('');
+  document.getElementById('pMonth').value = now.getMonth() + 1;
+  document.getElementById('pQuarter').innerHTML = [1,2,3,4].map(n => `<option value="${n}">第${n}季度</option>`).join('');
+  document.getElementById('pQuarter').value = Math.floor(now.getMonth()/3) + 1;
+  onPeriodTypeChange();
+  document.getElementById('periodModal').style.display = 'flex';
+}
+
+function closePeriodModal() {
+  document.getElementById('periodModal').style.display = 'none';
+}
+
+function onPeriodTypeChange() {
+  const t = document.getElementById('pType').value;
+  document.getElementById('pMonthRow').style.display = t === 'month' ? 'flex' : 'none';
+  document.getElementById('pQuarterRow').style.display = t === 'quarter' ? 'flex' : 'none';
+}
+
+function currentPeriod() {
+  const t = document.getElementById('pType').value;
+  const y = parseInt(document.getElementById('pYear').value, 10);
+  if (t === 'month') {
+    const m = parseInt(document.getElementById('pMonth').value, 10);
+    return { type: t, year: y, month: m, label: `${y}年${m}月` };
+  }
+  if (t === 'quarter') {
+    const q = parseInt(document.getElementById('pQuarter').value, 10);
+    return { type: t, year: y, quarter: q, label: `${y}年第${q}季度` };
+  }
+  return { type: 'year', year: y, label: `${y}年度` };
+}
+
+function filterByPeriod(p) {
+  return records.filter(r => {
+    const d = new Date(r.created_at);
+    if (d.getFullYear() !== p.year) return false;
+    if (p.type === 'year') return true;
+    if (p.type === 'month') return d.getMonth() + 1 === p.month;
+    if (p.type === 'quarter') return Math.floor(d.getMonth()/3) + 1 === p.quarter;
+    return true;
   });
 }
 
-async function printWeek() {
-  const data = filterByRange();
-  if (!data.length) { alert('当前筛选无数据'); return; }
-  const allUrls = [];
-  data.forEach(r => allUrls.push(...getPhotoList(r)));
-  await preloadImages(allUrls);
+// 下载原图后缩成小图 dataURL，避免 PDF 里反复加载大图
+function loadThumb(url, maxW = 260, quality = 0.7) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; clearTimeout(timer); resolve(v); } };
+    const timer = setTimeout(() => finish(''), 8000);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        let w = im.width, h = im.height;
+        if (w > maxW) { const k = maxW / w; w = maxW; h = Math.round(h * k); }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(im, 0, 0, w, h);
+        finish(c.toDataURL('image/jpeg', quality));
+      } catch (e) { finish(''); }
+    };
+    im.onerror = () => finish('');
+    im.src = url;
+  });
+}
+
+async function buildPdfReport(data, label) {
+  const allUrls = [...new Set(data.flatMap(r => getPhotoList(r)))];
+  const urlThumbs = {};
+  await Promise.all(allUrls.map(async u => { urlThumbs[u] = await loadThumb(u); }));
 
   const cards = data.map((r, idx) => {
     const photos = getPhotoList(r);
     const pics = photos.length
-      ? `<div class="pics">${photos.map(u => `<img src="${u}">`).join('')}</div>`
+      ? `<div class="pics">${photos.map(u => urlThumbs[u]
+          ? `<img src="${urlThumbs[u]}">`
+          : '<div class="ph-fail">图片加载失败</div>').join('')}</div>`
       : '<div class="meta">无照片</div>';
     const items = (r.items||[]).map(i => `${i.name}×${i.qty}${i.unit||''}`).join('；');
     return `<div class="card">
@@ -345,7 +447,7 @@ async function printWeek() {
       ${pics}
     </div>`;
   }).join('');
-  const total = data.reduce((s,r)=>s+(r.total_amount||0),0);
+  const total = data.reduce((s, r) => s + (r.total_amount||0), 0);
 
   const html = `<html><head><meta charset="utf-8"><style>
     body{font-family:微软雅黑;font-size:12px;padding:20px;color:#222}
@@ -356,10 +458,11 @@ async function printWeek() {
     .meta{color:#444}
     .pics{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
     .pics img{width:130px;height:100px;object-fit:cover;border:1px solid #ccc}
+    .ph-fail{width:130px;height:100px;display:flex;align-items:center;justify-content:center;border:1px dashed #ccc;color:#999;font-size:11px}
     .sum{font-weight:bold;margin:10px 0}
     .sign{margin-top:24px}
   </style></head><body>
-    <h1>站场小管家 · 周作业报表（带照片）</h1>
+    <h1>站场小管家 · ${label}作业报表（带照片）</h1>
     <div class="sub">导出时间：${new Date().toLocaleString()}　共 ${data.length} 条记录</div>
     ${cards}
     <div class="sum">合计金额：${total.toFixed(2)} 元</div>
@@ -371,7 +474,24 @@ async function printWeek() {
   w.document.close();
   setTimeout(() => w.print(), 500);
 }
-window.printWeek = printWeek;
+
+async function confirmPeriodExport() {
+  const p = currentPeriod();
+  const data = filterByPeriod(p);
+  if (!data.length) { alert(`${p.label}内暂无记录`); return; }
+  const btn = document.getElementById('pOkBtn');
+  btn.disabled = true; btn.textContent = '生成中…';
+  try {
+    await buildPdfReport(data, p.label);
+    closePeriodModal();
+  } finally {
+    btn.disabled = false; btn.textContent = '生成PDF';
+  }
+}
+window.openPeriodModal = openPeriodModal;
+window.closePeriodModal = closePeriodModal;
+window.onPeriodTypeChange = onPeriodTypeChange;
+window.confirmPeriodExport = confirmPeriodExport;
 
 function renderLib() {
   const q = (document.getElementById('searchLib').value||'').toLowerCase();
